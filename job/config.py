@@ -28,8 +28,18 @@ THRESHOLDS_FILE = KNOWLEDGE_DIR / "thresholds.yaml"
 FESTIVAL_CALENDAR_CSV = DATA_DIR / "seed" / "festival_calendar.csv"
 
 
+PASSWORD_PLACEHOLDER = "REPLACE_WITH_DB_PASSWORD"
+
+
+def database_configured() -> bool:
+    url = os.environ.get("DATABASE_URL", "")
+    return bool(url) and PASSWORD_PLACEHOLDER not in url
+
+
 def database_url() -> str:
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL is not set; add the Supabase pooler connection string to .env")
+    if PASSWORD_PLACEHOLDER in url:
+        raise RuntimeError(f"DATABASE_URL still contains {PASSWORD_PLACEHOLDER}; put the Supabase database password in .env")
     return url

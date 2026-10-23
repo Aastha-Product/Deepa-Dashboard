@@ -1,4 +1,3 @@
-import os
 import shutil
 
 import pytest
@@ -113,7 +112,8 @@ def test_signer_name():
 
 # --- Postgres: run inside the job container (DATABASE_URL set). Each test rolls back. ---
 
-needs_db = pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set")
+needs_db = pytest.mark.skipif(not config.database_configured(),
+                              reason="DATABASE_URL not set or still has the password placeholder")
 
 
 @pytest.fixture
