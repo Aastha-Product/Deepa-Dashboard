@@ -5,6 +5,8 @@ access token in the URL fragment -> a tiny script posts it to /auth/session -> t
 token with Supabase, looks the email up in app_users and sets a signed, http-only session cookie.
 Only people listed in app_users get in; Supabase users are not created from the login page.
 """
+import hashlib
+import hmac
 import os
 from dataclasses import dataclass
 
@@ -39,11 +41,20 @@ class NotSignedIn(Exception):
     pass
 
 
-def _serializer() -> URLSafeTimedSerializer:
+def _session_key() -> str:
+    """SESSION_SECRET if set; otherwise a key derived from the Supabase JWT secret that the
+    Supabase-Vercel integration already stores in Vercel (never the JWT secret itself)."""
     secret = os.environ.get("SESSION_SECRET", "")
-    if len(secret) < 32:
-        raise RuntimeError("SESSION_SECRET must be set (at least 32 characters)")
-    return URLSafeTimedSerializer(secret, salt="dp-session")
+    if len(secret) >= 32:
+        return secret
+    base = os.environ.get("SUPABASE_JWT_SECRET", "")
+    if len(base) >= 32:
+        return hmac.new(base.encode(), b"freshroots-dashboard-session-v1", hashlib.sha256).hexdigest()
+    raise RuntimeError("Set SESSION_SECRET (32+ characters) or connect the Supabase-Vercel integration")
+
+
+def _serializer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(_session_key(), salt="dp-session")
 
 
 def _supabase():

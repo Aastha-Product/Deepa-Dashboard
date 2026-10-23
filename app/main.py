@@ -80,7 +80,16 @@ def _check_cron_secret(authorization: str | None) -> None:
 
 @app.get("/api/health")
 def health():
-    return {"ok": True}
+    """Up, plus whether the database and the cron secret are configured (no details leaked)."""
+    status = {"ok": True, "cron_secret": bool(os.environ.get("CRON_SECRET"))}
+    try:
+        with db.connect() as conn:
+            conn.execute("SELECT 1")
+        status["db"] = "ok"
+    except Exception as exc:  # noqa: BLE001
+        log.warning("health: database check failed: %s", type(exc).__name__)
+        status["db"] = "unavailable"
+    return status
 
 
 @app.get("/api/run")
@@ -317,11 +326,20 @@ async def upload_export(request: Request, sales: UploadFile = File(...), invento
 
 
 @app.post("/admin/run")
-def run_now(request: Request):
+def run_now(request: Request, replay_as_of: str = Form("")):
+    """Run on the newest export. replay_as_of (demo only) sets the run clock, e.g. 2026-10-19T06:00."""
     user = auth.current_user(request)
     auth.require(user, auth.CAN_RUN)
+    clock = None
+    if replay_as_of.strip():
+        try:
+            clock = datetime.fromisoformat(replay_as_of.strip())
+        except ValueError:
+            return _back("/admin", "Replay time must look like 2026-10-19T06:00.", "err")
+        clock = clock if clock.tzinfo else clock.replace(tzinfo=ingest.IST)
     with db.connect() as conn:
-        s = job_run.execute_and_notify(conn, triggered_by=f"manual:{user.email}")
+        s = job_run.execute_and_notify(conn, triggered_by=f"manual:{user.email}" + (" (replay)" if clock else ""),
+                                       run_as_of=clock)
     if s.status == "ok":
         return _back("/", f"Run {s.run_id} finished. {s.counts.get('exceptions', 0)} exceptions, "
                           f"{s.counts.get('reorder_lines', 0)} reorder lines.")

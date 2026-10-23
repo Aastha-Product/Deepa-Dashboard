@@ -14,7 +14,10 @@
 <div class="card">
   <b>Run now</b>
   <p class="small">Runs the rules on the newest export in the bucket, exactly like the Mon + Thu 06:00 run. A stale export (over 48 h) stops the run and alerts IT.</p>
-  <form method="post" action="/admin/run"><button class="btn" type="submit">Run now</button></form>
+  <form method="post" action="/admin/run" class="inline">
+    <input type="text" name="replay_as_of" placeholder="Replay as of (demo), e.g. 2026-10-19T06:00" aria-label="Replay time" style="min-width:300px">
+    <button class="btn" type="submit">Run now</button></form>
+  <p class="small">Leave the replay time empty for a real run. Fill it only to replay a past export, such as the Case 01 seed (stock as of 19 Oct 2026); otherwise the 48-hour rule correctly stops an old export.</p>
 </div>
 </div>
 <div class="sec">Recent runs</div>

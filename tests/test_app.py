@@ -25,7 +25,22 @@ def client(monkeypatch):
 
 
 def test_health(client):
-    assert client.get("/api/health").json() == {"ok": True}
+    body = client.get("/api/health").json()
+    assert body["ok"] is True and body["cron_secret"] is True and body["db"] in ("ok", "unavailable")
+
+
+def test_session_key_derived_from_supabase_jwt_secret(monkeypatch):
+    from app import auth
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "j" * 40)
+    key = auth._session_key()
+    assert len(key) == 64 and "j" * 40 not in key
+    monkeypatch.setenv("SESSION_SECRET", "s" * 40)
+    assert auth._session_key() == "s" * 40
+    monkeypatch.delenv("SESSION_SECRET")
+    monkeypatch.delenv("SUPABASE_JWT_SECRET")
+    with pytest.raises(RuntimeError):
+        auth._session_key()
 
 
 @pytest.mark.parametrize("header", [None, "Bearer wrong", "s3cret-for-tests"])
