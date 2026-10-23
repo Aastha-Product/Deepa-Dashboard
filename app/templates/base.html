@@ -87,6 +87,15 @@ tbody tr:hover td,table tr:hover td{background:#f8fafd}
 .bitem{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:9px;background:#f6f8fc;border-left:3px solid #c9d1e2;color:var(--ink)}
 .bitem:hover{text-decoration:none;background:#eef2f9} .bitem span{font-size:12.5px;color:var(--ink-2)}
 .bitem.so{border-left-color:var(--red)} .bitem.hd{border-left-color:var(--blue)} .bitem.ov{border-left-color:#d08a1a} .bitem.ex{border-left-color:var(--purple)}
+.bsum{font-size:16px;font-weight:600;margin:0 0 12px;line-height:1.4}
+.bact{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:auto;padding-top:8px} .bact form{margin:0}
+.tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 8px} .tools input[type=search]{flex:1;min-width:220px;max-width:460px}
+input[type=search]{font:inherit;border:1px solid #cdd5e4;border-radius:7px;padding:6px 9px;background:#fff;color:var(--ink)}
+button.sort{all:unset;cursor:pointer;color:inherit;font:inherit} button.sort:hover{color:var(--ink)}
+button.sort:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:3px}
+button.sort::after{content:" ↕";opacity:.45} button.sort[data-dir=asc]::after{content:" ↑";opacity:1} button.sort[data-dir=desc]::after{content:" ↓";opacity:1}
+h3.grp{display:flex;align-items:center;gap:8px;margin:14px 0 8px;font-size:14px} .badge.soft{background:var(--line);color:var(--ink-2);margin-left:0}
+.why{max-width:280px;font-size:12.5px;color:var(--ink-2)}
 @media (max-width:860px){.pipe{grid-template-columns:1fr 1fr}.pipe .step{border-bottom:1px solid var(--line)}}
 .check{display:grid;grid-template-columns:22px 1fr;gap:4px 10px;padding:10px 0;border-bottom:1px solid #eef1f7} .check:last-child{border-bottom:0}
 .check .dot{width:12px;height:12px;border-radius:50%;margin-top:4px} .dot.ok{background:var(--green)} .dot.missing{background:#e0a100} .dot.error{background:var(--red)}

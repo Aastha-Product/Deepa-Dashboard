@@ -26,6 +26,46 @@
   {% endif %}
 </div>
 
+{% set v = ts.values %}
+<div class="sec"><h2>Recommendation rules <small>what the engine does, in the order it does it</small></h2></div>
+<div class="card scroll" style="padding:6px 10px">
+<table>
+  <tr><th>Rule</th><th>Logic</th><th>Source</th></tr>
+  <tr><td><b>Festival uplift</b></td><td>+{{ v['rules.festival.uplift_pct'] }}% demand before any check, in festival months from the calendar file</td><td><span class="chip done">Raghav's rule 4</span></td></tr>
+  <tr><td><b>Weeks of cover</b></td><td>(on hand + open Zoho POs) ÷ weekly demand; on hand only while Zoho isn't connected</td><td><span class="chip hd">Components map</span></td></tr>
+  <tr><td><b>High demand</b></td><td>last {{ v['rules.high_demand.short_window_weeks'] }} weeks more than {{ v['rules.high_demand.threshold_pct'] }}% above the {{ v['rules.high_demand.long_window_weeks'] }}-week average → next order {{ v['rules.high_demand.reorder_multiplier'] }} &times; standard</td><td><span class="chip done">Raghav's rule 1</span></td></tr>
+  <tr><td><b>Stockout risk</b></td><td>cover below {{ v['rules.cover_windows.standard.min_weeks'] }} weeks (perishable {{ v['rules.cover_windows.high_perishability.min_weeks'] }}) → reorder now</td><td><span class="chip done">Raghav's rules 2, 5</span></td></tr>
+  <tr><td><b>Overstock risk</b></td><td>cover above {{ v['rules.cover_windows.standard.max_weeks'] }} weeks (perishable {{ v['rules.cover_windows.high_perishability.max_weeks'] }}) → pause the next order</td><td><span class="chip done">Raghav's rules 3, 5</span></td></tr>
+  <tr><td><b>Stockout reorder size</b></td><td>standard (1.5 &times; if high demand), topped up to the minimum cover, never above the maximum</td><td><span class="chip warn">Added rule A · Raghav to confirm</span></td></tr>
+  <tr><td><b>Exceptions</b></td><td>cases the rules can't settle get no final number until you decide them</td><td><span class="chip warn">Added rule B · Raghav to confirm</span></td></tr>
+  <tr><td><b>Stale data</b></td><td>an export over {{ v['data_checks.stale_after_hours'] }} h old stops the run; no recommendations, IT is alerted</td><td><span class="chip warn">Added rule C · Raghav to confirm</span></td></tr>
+</table></div>
+
+{% set exc = lines|selectattr('exception_type')|list %}
+<div class="sec"><h2>What comes to you for a decision <small>reasons explain a number; they never change one</small></h2>
+  <a class="btn sm ghost" href="/decisions/log.csv">Decision log (CSV)</a></div>
+<div class="card scroll" style="padding:6px 10px">
+<table>
+  <tr><th>Route</th><th>What happens</th><th>Kind</th><th class="n">SKUs this run</th></tr>
+  <tr><td><b>Rules disagree</b> (high demand + overstock)</td><td>Exception: you accept, change or override</td><td><span class="chip ex">Rule B</span></td><td class="n">{{ exc|selectattr('exception_type', 'equalto', 'conflicting_flags')|list|length }}</td></tr>
+  <tr><td><b>New launch</b> (under 12 weeks of history)</td><td>Exception: no number until you decide</td><td><span class="chip ex">Rule B</span></td><td class="n">{{ exc|selectattr('exception_type', 'equalto', 'new_sku')|list|length }}</td></tr>
+  <tr><td><b>No sales</b> in the 12-week window</td><td>Exception: cover can't be worked out</td><td><span class="chip ex">Rule B</span></td><td class="n">{{ exc|selectattr('exception_type', 'equalto', 'zero_demand')|list|length }}</td></tr>
+  <tr><td><b>Order is 2&times; standard or more</b></td><td>Approved one by one, never in bulk</td><td><span class="chip wait">Dashboard check</span></td><td class="n">{{ lines|selectattr('large_order')|list|length }}</td></tr>
+  <tr><td><b>Order would leave stock above the maximum</b></td><td>Approved one by one, never in bulk</td><td><span class="chip wait">Dashboard check</span></td><td class="n">{{ lines|selectattr('over_max_after')|list|length }}</td></tr>
+  <tr><td><b>Everything else flagged</b></td><td>Reorder or pause at the rules' number; you approve it, singly or in bulk</td><td><span class="chip done">Rules 1–5</span></td><td class="n">{{ lines|selectattr('line_status', 'ne', 'no_action')|rejectattr('exception_type')|rejectattr('needs_look')|list|length }}</td></tr>
+</table></div>
+<p class="small">The dashboard checks add a deliberate look before approval. They don't change the signed-off rules or any quantity.</p>
+
+<div class="sec"><h2>Owners</h2></div>
+<div class="card scroll" style="padding:6px 10px">
+<table>
+  <tr><th>Who</th><th>Role here</th><th>Responsible for</th></tr>
+  <tr><td><b>Deepa Nair</b> <span class="small">Head of Operations</span></td><td>Sponsor and decider</td><td>The 90-day result; signs off the rules, decides exceptions and approves every reorder and pause in this dashboard, twice a week</td></tr>
+  <tr><td><b>Raghav Kulkarni</b> <span class="small">Senior Demand Planner</span></td><td>Rules owner</td><td>The five forecasting rules; confirms added rules A–C. Any change to a threshold makes a new version that needs sign-off</td></tr>
+  <tr><td><b>Procurement</b></td><td>Action owner</td><td>Raises the approved reorders as POs in Zoho, from the CSV export</td></tr>
+  <tr><td><b>IT</b></td><td>Data owner</td><td>The SAP export before each Mon + Thu 06:00 run; alerted when a run stops on data over {{ v['data_checks.stale_after_hours'] }} h old</td></tr>
+</table></div>
+
 <div class="sec"><h2>Impact <small>tracked in units; the SAP export has no price per SKU</small></h2></div>
 <div class="tiles">
   <div class="tile"><div class="n">{{ s.accepted|rate(s.all_decisions) }}</div><div class="l">Accepted as recommended</div><div class="s">{{ s.all_decisions }} decisions · {{ s.shadow_decisions }} in shadow mode</div></div>

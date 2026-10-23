@@ -86,6 +86,17 @@ def app_client(monkeypatch):
     monkeypatch.setattr(queries, "threshold_version", lambda conn, h: None)
     monkeypatch.setattr(queries, "previous_run", lambda conn, run_id: None)
     monkeypatch.setattr(queries, "last_zoho_export", lambda conn, run_id: None)
+    monkeypatch.setattr(queries, "sales_by_sku", lambda conn, export_id:
+                        {s: sorted(w.items()) for s, w in EXPORT.sales.items()})
+    monkeypatch.setattr(queries, "data_counts", lambda conn, export_id: {
+        "sku_master": 15, "sales_weekly": 240, "inventory_snapshot": 15, "distributors": 4, "festival_calendar": 24})
+    monkeypatch.setattr(queries, "distributors", lambda conn: [
+        {"distributor_id": d, "distributor_name": n, "region": "Maharashtra", "status": "Active", "hubspot_url": None}
+        for d, n in [("DIST001", "NutriFlow Distributors"), ("DIST002", "GrainPath Logistics")]])
+    monkeypatch.setattr(queries, "decision_log", lambda conn: [
+        {"decided_at": RUN_AS_OF, "run_id": 1, "run_as_of": RUN_AS_OF, "sku_id": "SKU001", "sku_name": "Freshroots Mango Drink 200ml",
+         "gate": 1, "decision": "change", "final_qty": 600, "reason": "festival stock already on the way",
+         "decided_by": "Deepa Nair (dashboard)", "shadow": True}])
     monkeypatch.setattr(queries, "record_zoho_export", lambda conn, **kw: recorded.append(("zoho_export", kw)))
     monkeypatch.setattr(main.thresholds, "load", lambda conn, ts: (3, True))
     monkeypatch.setattr(main.thresholds, "sign", lambda conn, v, by, actor=None: recorded.append(("sign", v, by, actor)))
@@ -123,7 +134,8 @@ def test_overview_tiles_match_golden_run(app_client):
         assert f">{n}</div><div class=\"l\">{label}<" in html
     assert "1,870 units in total" in html                      # 750 + 161 + 500 + 150 + 309
     assert rows_in(html) == 15
-    assert html.index("SKU001") < html.index("SKU013") < html.index("SKU006") < html.index("SKU002")
+    table = html[html.index('id="stock"'):]
+    assert table.index("SKU001") < table.index("SKU013") < table.index("SKU006") < table.index("SKU002")
     assert "This is the first run" in html
 
 
@@ -313,7 +325,7 @@ def test_large_order_check_and_approve_all_skips_it(app_client, monkeypatch):
     app_client.post("/decide/approve-all", data={"run_id": 1})
     skus = {kw["sku_id"] for x in app_client.recorded if isinstance(x, tuple) and x[0] == "decision" for kw in [x[1]]}
     assert "SKU013" not in skus and len(skus) == 5
-    assert "1 large order to check" in app_client.get("/").text
+    assert "1 order to check one by one" in app_client.get("/").text
 
 
 def test_zoho_export_csv(app_client, monkeypatch):
@@ -339,3 +351,68 @@ def test_pipeline_strip_and_briefing(app_client):
     assert "Multigrain Bread 400g and Almond Milk 500ml: 13 days of stock on hand" in html
     assert "Mango Drink 200ml is up 21%" in html
     assert "Pause 2 orders: about 420 units above the maximum" in html
+
+
+def test_overview_table_has_search_sort_sparklines_and_trend(app_client):
+    html = app_client.get("/").text
+    assert 'id="sku-q"' in html and html.count('class="sort"') == 5
+    assert html.count('aria-label="16 weeks of units sold') == 15
+    assert ">+21%</span>" in html                              # SKU001, high demand
+    assert "5 of 15 SKUs are below their stock window in a festival month" in html
+
+
+def test_briefing_cards_approve_in_one_click(app_client):
+    html = app_client.get("/").text
+    assert "Approve 2 reorders" in html and "Approve 2 pauses" in html
+    assert "Approve 750" not in html                           # SKU001 is still an open exception
+    r = app_client.post("/decide/approve-selected", data={"run_id": 1, "sku_id": ["SKU006", "SKU007"], "back": "/"})
+    assert r.status_code == 303 and r.headers["location"].startswith("/?")
+    approved = [x[1] for x in app_client.recorded if isinstance(x, tuple) and x[0] == "decision"]
+    assert {d["sku_id"] for d in approved} == {"SKU006", "SKU007"} and all(d["gate"] == 2 for d in approved)
+
+
+def test_approve_selected_skips_lines_not_waiting_or_needing_a_look(app_client):
+    r = app_client.post("/decide/approve-selected", data={"run_id": 1, "sku_id": ["SKU001", "SKU002"],
+                                                          "back": "https://example.com"})
+    approved = {x[1]["sku_id"] for x in app_client.recorded if isinstance(x, tuple) and x[0] == "decision"}
+    assert approved == set() and r.headers["location"].startswith("/decisions?")   # SKU001 is an exception, SKU002 OK
+
+
+def test_decisions_groups_stockout_first_with_why(app_client, monkeypatch):
+    done = [{**l, "line_status": "awaiting_gate2"} if l["exception_type"] else l for l in LINES]
+    monkeypatch.setattr(queries, "lines", lambda conn, run_id, flag=None, **f: done)
+    html = app_client.get("/decisions").text
+    urgent, later = html.index('id="urgent"'), html.index('id="next"')
+    assert urgent < html.index("SKU013", urgent) < later < html.index("SKU006", later)
+    assert "3.2 weeks of cover, below the 6-week minimum." in html
+    assert "above the 20% trigger" in html and 'form="bulk"' in html and "Approve the ticked lines" in html
+
+
+def test_reorder_left_above_the_maximum_needs_a_look(app_client, monkeypatch):
+    over = [{**l, "cover_after": 4.9} if l["sku_id"] == "SKU011" else l for l in LINES]     # perishable, max 4
+    monkeypatch.setattr(queries, "lines", lambda conn, run_id, flag=None, **f: over)
+    html = app_client.get("/decisions").text
+    assert "4.9 w after: above the 4-w max" in html and 'value="SKU011" form="bulk"' not in html
+    app_client.post("/decide/approve-all", data={"run_id": 1})
+    assert "SKU011" not in {x[1]["sku_id"] for x in app_client.recorded if isinstance(x, tuple) and x[0] == "decision"}
+
+
+def test_decision_log_csv(app_client):
+    r = app_client.get("/decisions/log.csv")
+    assert r.status_code == 200 and "freshroots_decision_log.csv" in r.headers["content-disposition"]
+    rows = list(csv.reader(r.text.splitlines()))
+    assert rows[0] == main.LOG_COLUMNS
+    assert rows[1][3:9] == ["SKU001", "Freshroots Mango Drink 200ml", "1 exception", "change", "600",
+                            "festival stock already on the way"] and rows[1][-1] == "yes"
+
+
+def test_rules_routing_and_owners_tables(app_client):
+    html = app_client.get("/impact").text
+    assert "Raghav's rule 4" in html and "Added rule A · Raghav to confirm" in html
+    assert "Order would leave stock above the maximum" in html and "Raghav Kulkarni" in html and "Action owner" in html
+
+
+def test_data_used_and_distributors(app_client):
+    html = app_client.get("/admin").text
+    assert "Data used in run 1" in html and ">240</td>" in html and "Zoho Inventory, read-only" in html
+    assert "NutriFlow Distributors" in html and "Mango Drink 200ml" in html

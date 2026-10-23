@@ -56,24 +56,30 @@
 {% endfor %}
 
 <div class="sec"><h2>2 · Approve reorders and pauses <small>check the quantity; reorders are then raised in Zoho by hand, pauses skip the next order (map step 11)</small></h2>
-  {% set bulk = approvals|rejectattr('large_order')|list %}
+  {% set bulk = approvals|rejectattr('needs_look')|list %}
   {% if bulk %}
   <form method="post" action="/decide/approve-all" onsubmit="return confirm('Approve {{ bulk|length }} line{{ 's' if bulk|length != 1 }} at the recommended quantity?{{ ' Large orders stay for you to approve one by one.' if bulk|length != approvals|length }}')">
     <input type="hidden" name="run_id" value="{{ run.run_id }}">
     <button class="btn green" type="submit">Approve {{ 'all ' if bulk|length == approvals|length }}{{ bulk|length }} as recommended</button></form>
   {% endif %}
 </div>
+{% if approvals %}
+<form id="bulk" method="post" action="/decide/approve-selected"><input type="hidden" name="run_id" value="{{ run.run_id }}"></form>
+{% for key, title, ls in groups if ls %}
+<h3 class="grp" id="{{ key }}">{{ title }} <span class="badge soft">{{ ls|length }}</span></h3>
 <div class="card scroll" style="padding:6px 10px">
 <table>
-  <tr><th>SKU</th><th>Action</th><th class="n">Qty</th><th class="n">Days of stock</th><th>Cover now → after</th><th>Check</th><th>Decide</th></tr>
-  {% for l in approvals %}
+  <tr><th><span class="mut" title="Ticked lines are approved together">Tick</span></th><th>SKU</th><th>Action</th><th class="n">Qty</th><th class="n">Days of stock</th><th>Cover now → after</th><th>Why</th><th>Check</th><th>Decide</th></tr>
+  {% for l in ls %}
   <tr>
+    <td>{% if l.needs_look %}<span class="mut" title="Approve this one on its own">—</span>{% else %}<input type="checkbox" name="sku_id" value="{{ l.sku_id }}" form="bulk" checked aria-label="Select {{ l.sku_id }}">{% endif %}</td>
     <td><a href="/sku/{{ l.sku_id }}?run={{ run.run_id }}"><b>{{ l.sku_id }}</b></a> <span class="small">{{ l.sku_name|short }}</span><br><span class="mut" style="font-size:12px">{{ m.distributor(l) }}</span></td>
     <td>{{ 'Pause next order' if l.action == 'pause' else 'Reorder' }}</td>
     <td class="n"><b>{{ l.final_qty if l.action != 'pause' else '—' }}</b>{% if l.gate1_qty is not none and l.gate1_qty != l.qty %}<br><span class="mut">was {{ l.qty }}</span>{% endif %}</td>
     <td class="n">{{ m.days(l) }}</td>
     <td>{{ m.cover_bar(l, 16) }}<br><span class="small">{{ l.cover_weeks|fmtw }} w{% if l.cover_after is not none %} → {{ l.cover_after|fmtw }} w{% endif %} · window {{ l.min_weeks|wk }}–{{ l.max_weeks|wk }} w</span></td>
-    <td>{% if l.large_order %}<span class="chip stop" title="2x the standard order or more: approve it on its own">large order: {{ (l.final_qty / l.standard_reorder_qty)|round(1) }}&times; standard</span><br>{% endif %}{% if l.qty_basis == 'topup' %}<span class="chip warn" title="Standard quantity wouldn't reach the minimum cover">topped up from {{ l.standard_reorder_qty }}</span>{% elif l.gate1_decision %}<span class="chip ex">exception: {{ l.gate1_decision }}</span>{% elif l.perishability == 'High' %}<span class="chip warn">perishable</span>{% else %}<span class="mut">—</span>{% endif %}</td>
+    <td class="why">{{ l.why }}</td>
+    <td>{% if l.needs_look %}{{ m.checks(l) }}<br>{% endif %}{% if l.qty_basis == 'topup' %}<span class="chip warn" title="Standard quantity wouldn't reach the minimum cover">topped up from {{ l.standard_reorder_qty }}</span>{% elif l.gate1_decision %}<span class="chip ex">exception: {{ l.gate1_decision }}</span>{% elif l.perishability == 'High' %}<span class="chip warn">perishable</span>{% elif not l.needs_look %}<span class="mut">—</span>{% endif %}</td>
     <td>
       <form method="post" action="/decide" class="inline">
         <input type="hidden" name="run_id" value="{{ run.run_id }}"><input type="hidden" name="sku_id" value="{{ l.sku_id }}"><input type="hidden" name="gate" value="2">
@@ -84,9 +90,15 @@
       </form>
     </td>
   </tr>
-  {% else %}<tr><td colspan="7" class="mut">{% if pending.gate1 %}Decide the exceptions above first; their lines then appear here.{% else %}Nothing to approve in this run.{% endif %}</td></tr>{% endfor %}
+  {% endfor %}
 </table>
 </div>
+{% endfor %}
+{% if bulk %}<div class="inline" style="margin-top:10px"><button class="btn sm" type="submit" form="bulk">Approve the ticked lines</button>
+  <span class="small mut">Untick any line you want to leave for now.{% if bulk|length != approvals|length %} Orders to check one by one have no tick box: use their own Save.{% endif %}</span></div>{% endif %}
+{% else %}
+<div class="card small">{% if pending.gate1 %}Decide the exceptions above first; their lines then appear here.{% else %}Nothing to approve in this run.{% endif %}</div>
+{% endif %}
 
 <div class="sec" id="zoho"><h2>3 · Zoho export <small>approved reorders as a CSV to raise the POs in Zoho by hand; nothing is sent to Zoho automatically</small></h2></div>
 <div class="card" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
@@ -101,7 +113,8 @@
 </div>
 
 {% if decided %}
-<div class="sec"><h2>Decided this run <small>approved reorders are raised in Zoho by hand and the next run marks them "PO recorded"; approved pauses skip the next order</small></h2></div>
+<div class="sec"><h2>Decided this run <small>approved reorders are raised in Zoho by hand and the next run marks them "PO recorded"; approved pauses skip the next order</small></h2>
+  <a class="btn sm ghost" href="/decisions/log.csv">Decision log (CSV)</a></div>
 <div class="card scroll" style="padding:6px 10px">
 <table>
   <tr><th>SKU</th><th>Decision</th><th class="n">Qty</th><th>When</th><th>Reason</th><th>Status</th></tr>

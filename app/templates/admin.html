@@ -13,6 +13,31 @@
   {% endfor %}
 </div>
 
+{% if run and counts %}
+<div class="sec"><h2>Data used in run {{ run.run_id }} <small>Case 01 seed files only; there are no prices, so everything is in units, weeks and days</small></h2></div>
+<div class="card scroll" style="padding:6px 10px">
+<table>
+  <tr><th>File</th><th>Contents</th><th>Where it comes from</th><th class="n">Rows</th></tr>
+  <tr><td><code>sales_weekly.csv</code></td><td>Units sold per SKU per week</td><td>SAP export {{ run.export_id }}</td><td class="n">{{ counts.sales_weekly|num }}</td></tr>
+  <tr><td><code>inventory_snapshot.csv</code></td><td>Units on hand, Pune Central Warehouse, as of {{ run.data_as_of }}</td><td>SAP export {{ run.export_id }}</td><td class="n">{{ counts.inventory_snapshot|num }}</td></tr>
+  <tr><td><code>sku_master.csv</code></td><td>Name, category, perishability, standard reorder qty, distributor</td><td>Reference table</td><td class="n">{{ counts.sku_master|num }}</td></tr>
+  <tr><td><code>distributors.csv</code></td><td>Distributor name, region, status</td><td>Reference table</td><td class="n">{{ counts.distributors|num }}</td></tr>
+  <tr><td><code>festival_calendar.csv</code></td><td>Festival flag per month</td><td>Reference table</td><td class="n">{{ counts.festival_calendar|num }}</td></tr>
+  <tr><td>Open purchase orders</td><td>Stock already on order, counted in weeks of cover</td><td>Zoho Inventory, read-only</td><td class="n">{% if run.zoho_status == 'ok' %}used{% else %}<span class="mut">{{ (run.zoho_status or 'not configured')|replace('_', ' ') }}</span>{% endif %}</td></tr>
+</table></div>
+
+<div class="sec"><h2>Distributors <small>linked to each SKU as a filter only; they don't change any number</small></h2></div>
+<div class="card scroll" style="padding:6px 10px">
+<table>
+  <tr><th>Distributor</th><th>Region</th><th>Status</th><th class="n">SKUs</th><th>Flagged this run</th></tr>
+  {% for d in distributors %}
+  <tr><td><b>{% if d.hubspot_url %}<a href="{{ d.hubspot_url }}" target="_blank" rel="noopener">{{ d.distributor_name }} ↗</a>{% else %}{{ d.distributor_name }}{% endif %}</b> <span class="mut">{{ d.distributor_id }}</span></td>
+    <td>{{ d.region }}</td><td>{{ d.status }}</td><td class="n">{{ d.skus|length }}</td>
+    <td class="small">{% for l in d.flagged %}<a href="/sku/{{ l.sku_id }}">{{ l.sku_name|short }}</a>{{ ', ' if not loop.last }}{% else %}<span class="mut">none</span>{% endfor %}</td></tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+
 <div class="grid g2" style="margin-top:18px">
 <div class="card">
   <h3>Upload an SAP export</h3>

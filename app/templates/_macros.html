@@ -58,6 +58,27 @@
 </svg>
 {%- endmacro %}
 
+{#- Units sold per week from zero, so a flat SKU reads flat; the shaded end is the last 4 weeks. -#}
+{% macro spark(vals) -%}
+{%- if vals and vals|length > 1 -%}
+{%- set W, H, n = 104, 28, vals|length -%}
+{%- set hi = [vals|max, 1]|max -%}
+{%- macro X(i) %}{{ 2 + i * (W - 4) / (n - 1) }}{% endmacro -%}
+{%- macro Y(v) %}{{ H - 3 - v / hi * (H - 7) }}{% endmacro -%}
+<svg viewBox="0 0 {{ W }} {{ H }}" width="{{ W }}" height="{{ H }}" role="img"
+     aria-label="{{ n }} weeks of units sold, from {{ vals[0] }} to {{ vals[-1] }} a week">
+  {%- if n > 4 %}<rect x="{{ X(n - 4) }}" y="1" width="{{ X(n - 1)|float - X(n - 4)|float + 2 }}" height="{{ H - 2 }}" rx="3" fill="#fff1d6"/>{% endif -%}
+  <polyline fill="none" stroke="#2f6fd6" stroke-width="1.6" stroke-linejoin="round" points="{% for v in vals %}{{ X(loop.index0) }},{{ Y(v) }} {% endfor %}"/>
+  <circle cx="{{ X(n - 1) }}" cy="{{ Y(vals[-1]) }}" r="2.4" fill="#2f6fd6"/>
+</svg>
+{%- else %}<span class="mut">—</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro checks(l) -%}
+  {%- if l.large_order %}<span class="chip stop" title="2x the standard order or more: approve it on its own">large order: {{ (l.final_qty / l.standard_reorder_qty)|round(1) }}&times; standard</span>{% endif -%}
+  {%- if l.over_max_after %}<span class="chip stop" title="The order would leave stock above the window's maximum: approve it on its own">{{ l.cover_after|fmtw }} w after: above the {{ l.max_weeks|wk }}-w max</span>{% endif -%}
+{%- endmacro %}
+
 {% macro chart(weeks, avg12, last4_weeks, window_weeks, threshold_pct) -%}
 {%- if weeks -%}
 {%- set W, H, P = 640, 240, 36 -%}

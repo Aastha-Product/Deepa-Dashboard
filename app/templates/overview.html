@@ -27,9 +27,21 @@
 
 {% if briefing %}
 <div class="card" style="margin-top:16px">
-  <div class="sec" style="margin:0 0 10px"><h2>Look at these first <small>from this run's numbers</small></h2></div>
+  <div class="sec" style="margin:0 0 6px"><h2>Look at these first</h2>
+    <span class="small mut">from this run's numbers, worked out by the rules, not AI · you decide</span></div>
+  <p class="bsum">{{ summary }}</p>
   <div class="briefs">{% for b in briefing %}
-    <a class="bitem {{ b.kind }}" href="{{ b.href }}"><b>{{ b.title }}</b><span>{{ b.detail }}</span></a>{% endfor %}</div>
+    <div class="bitem {{ b.kind }}"><b>{{ b.title }}</b><span>{{ b.detail }}</span>
+      <div class="bact">
+        {% if b.approve %}
+        <form method="post" action="/decide/approve-selected" onsubmit="return confirm('{{ b.approve_label }} ({{ b.approve|join(', ') }}) at the recommended quantity?')">
+          <input type="hidden" name="run_id" value="{{ run.run_id }}"><input type="hidden" name="back" value="/">
+          {% for s in b.approve %}<input type="hidden" name="sku_id" value="{{ s }}">{% endfor %}
+          <button class="btn sm green" type="submit">{{ b.approve_label }}</button></form>
+        {% endif %}
+        {% for a in b.links %}<a class="btn sm ghost" href="{{ a.href }}">{{ a.label }}</a>{% endfor %}
+      </div>
+    </div>{% endfor %}</div>
 </div>
 {% endif %}
 
@@ -77,28 +89,75 @@
 
 {% set covers = all_lines|selectattr('cover_weeks')|map(attribute='cover_weeks')|list %}
 {% set scale = [16, [covers|max if covers else 0, 24]|min]|max|round(0, 'ceil')|int %}
-<div class="sec">
-  <h2>Stock position <small>weeks of cover now (●) and after the recommended reorder (○), against each SKU's window (green)</small></h2>
-  <div class="seg">{% for k, v in filters.items() %}<a href="/?show={{ k }}{{ '&run=' ~ run.run_id if run_param }}" class="{{ 'on' if show == k }}">{{ v }}</a>{% endfor %}</div>
+<div class="sec" id="stock">
+  <h2>All SKUs <small>weeks of cover now (●) and after the recommended reorder (○), against each SKU's window (green)</small></h2>
+  <div class="seg">{% for k, v in filters.items() %}<a href="/?show={{ k }}{{ '&run=' ~ run.run_id if run_param }}#stock" class="{{ 'on' if show == k }}">{{ v }}</a>{% endfor %}</div>
+</div>
+<div class="tools">
+  <input type="search" id="sku-q" placeholder="Search SKU, name, category, distributor" aria-label="Search SKUs">
+  <span class="small mut">Click a column heading to sort</span>
+  <span class="small" id="sku-count" aria-live="polite">{{ lines|length }} SKU{{ 's' if lines|length != 1 }}</span>
 </div>
 <div class="card scroll" style="padding:6px 10px">
-<table>
-  <tr><th>SKU</th><th>Flag</th><th>Weeks of cover <span class="mut" style="font-weight:400">0 – {{ scale }} w</span></th><th class="n">Days of stock</th><th class="n">Cover</th><th class="n">Window</th><th>Recommendation</th><th>Status</th></tr>
+<table id="skus">
+  <thead><tr>
+    <th aria-sort="none"><button class="sort" data-key="sku">SKU</button></th>
+    <th>16 weeks <span class="mut" style="font-weight:400">units sold</span></th>
+    <th class="n"><button class="sort" data-key="trend" title="Last 4 weeks against the 12-week average">4-wk vs 12-wk</button></th>
+    <th class="n"><button class="sort" data-key="onhand">On hand</button></th>
+    <th class="n"><button class="sort" data-key="days">Days of stock</button></th>
+    <th><button class="sort" data-key="cover">Weeks of cover</button> <span class="mut" style="font-weight:400">0 – {{ scale }} w</span></th>
+    <th>Flag</th><th>Recommendation</th><th>Status</th>
+  </tr></thead>
+  <tbody>
   {% for l in lines %}
-  <tr>
-    <td><a href="/sku/{{ l.sku_id }}{{ '?run=' ~ run.run_id if run_param }}"><b>{{ l.sku_id }}</b></a> <span class="small">{{ l.sku_name|short }}</span>{% if l.perishability == 'High' %} <span class="chip warn" title="High perishability: 3–4 week window">perishable</span>{% endif %}</td>
-    <td>{{ m.flags(l) }}</td>
-    <td>{{ m.cover_bar(l, scale) }}</td>
+  <tr data-q="{{ (l.sku_id ~ ' ' ~ l.sku_name ~ ' ' ~ l.category ~ ' ' ~ l.distributor_name ~ ' ' ~ l.distributor_id)|lower }}"
+      data-sku="{{ l.sku_id }}" data-trend="{{ l.change_pct if l.change_pct is not none }}" data-onhand="{{ l.on_hand }}"
+      data-days="{{ l.days_left if l.days_left is not none }}" data-cover="{{ l.cover_weeks if l.cover_weeks is not none }}">
+    <td><a href="/sku/{{ l.sku_id }}{{ '?run=' ~ run.run_id if run_param }}"><b>{{ l.sku_name|short }}</b></a>{% if l.perishability == 'High' %} <span class="chip warn" title="High perishability: 3–4 week window">perishable</span>{% endif %}
+      <br><span class="mut" style="font-size:12px">{{ l.sku_id }} · {{ l.category }} · {{ m.distributor(l) }}</span></td>
+    <td>{{ m.spark(l.spark) }}</td>
+    <td class="n">{% if l.change_pct is not none %}<span style="color:{{ 'var(--blue)' if l.flag_high_demand else 'inherit' }};font-weight:{{ 700 if l.flag_high_demand else 400 }}">{{ '%+.0f'|format(l.change_pct) }}%</span>{% else %}<span class="mut">—</span>{% endif %}</td>
+    <td class="n">{{ l.on_hand|num }}</td>
     <td class="n">{{ m.days(l) }}</td>
-    <td class="n"><b>{{ l.cover_weeks|fmtw }} w</b>{% if l.cover_after is not none %}<br><span class="mut">→ {{ l.cover_after|fmtw }} w</span>{% endif %}</td>
-    <td class="n mut">{{ l.min_weeks|wk }}–{{ l.max_weeks|wk }} w</td>
+    <td>{{ m.cover_bar(l, scale) }}<br><span class="small"><b>{{ l.cover_weeks|fmtw }} w</b>{% if l.cover_after is not none %} → {{ l.cover_after|fmtw }} w{% endif %} <span class="mut">· window {{ l.min_weeks|wk }}–{{ l.max_weeks|wk }} w</span></span></td>
+    <td>{{ m.flags(l) }}</td>
     <td>{{ m.action(l) }}</td>
     <td>{{ m.status(l) }}</td>
   </tr>
-  {% else %}<tr><td colspan="8" class="mut">No SKUs in this view.</td></tr>{% endfor %}
+  {% else %}<tr data-q="" data-sku=""><td colspan="9" class="mut">No SKUs in this view.</td></tr>{% endfor %}
+  </tbody>
 </table>
 </div>
-<p class="small">Cover = (on hand{% if run.zoho_status == 'ok' %} + open POs{% endif %}) ÷ weekly demand{% if run.festival_month %} incl. the +{{ ((run.uplift - 1) * 100)|round|int }}% festival uplift{% endif %}. Click an SKU for its sales trend and reasoning.</p>
+<p class="small">Cover = (on hand{% if run.zoho_status == 'ok' %} + open POs{% endif %}) ÷ weekly demand{% if run.festival_month %} incl. the +{{ ((run.uplift - 1) * 100)|round|int }}% festival uplift{% endif %}. Days of stock counts on-hand units only. The sparkline's shaded end is the last 4 weeks. Click an SKU for its sales trend and reasoning.</p>
+<script>
+(function () {
+  var table = document.getElementById('skus'); if (!table) return;
+  var body = table.tBodies[0], q = document.getElementById('sku-q'), count = document.getElementById('sku-count');
+  q.addEventListener('input', function () {
+    var v = q.value.trim().toLowerCase(), n = 0;
+    Array.prototype.forEach.call(body.rows, function (r) {
+      var show = !v || (r.dataset.q || '').indexOf(v) !== -1; r.hidden = !show; if (show && r.dataset.sku) n++;
+    });
+    count.textContent = n + ' SKU' + (n === 1 ? '' : 's');
+  });
+  table.querySelectorAll('button.sort').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var key = b.dataset.key, dir = b.dataset.dir === 'asc' ? 'desc' : 'asc';
+      table.querySelectorAll('button.sort').forEach(function (x) { delete x.dataset.dir; x.parentElement.setAttribute('aria-sort', 'none'); });
+      b.dataset.dir = dir; b.parentElement.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
+      var rows = Array.prototype.slice.call(body.rows);
+      rows.sort(function (a, c) {
+        var x = a.dataset[key] || '', y = c.dataset[key] || '';
+        if (x === '' || y === '') return x === y ? 0 : (x === '' ? 1 : -1);      // blanks last either way
+        var d = key === 'sku' ? x.localeCompare(y) : parseFloat(x) - parseFloat(y);
+        return dir === 'asc' ? d : -d;
+      });
+      rows.forEach(function (r) { body.appendChild(r); });
+    });
+  });
+})();
+</script>
 
 {% set s = impact.stats %}{% set o = impact.totals %}
 <div class="sec"><h2>Impact so far</h2><a href="/impact" class="small">Impact &amp; rules →</a></div>

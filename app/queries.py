@@ -96,6 +96,35 @@ def weekly_sales(conn, export_id, sku_id):
                       "ORDER BY iso_week", (export_id, sku_id))
 
 
+def sales_by_sku(conn, export_id):
+    """{sku_id: [(iso_week, units), ...]} for one export, oldest week first (Overview sparklines)."""
+    out = {}
+    for r in _all(conn, "SELECT sku_id, iso_week, units_sold FROM sales_weekly WHERE export_id = %s "
+                        "ORDER BY sku_id, iso_week", (export_id,)):
+        out.setdefault(r["sku_id"], []).append((r["iso_week"], r["units_sold"]))
+    return out
+
+
+def data_counts(conn, export_id):
+    """Row counts behind a run: the SAP export's two files plus the reference tables."""
+    return _one(conn, """SELECT (SELECT count(*) FROM sku_master) AS sku_master,
+                                (SELECT count(*) FROM sales_weekly WHERE export_id = %s) AS sales_weekly,
+                                (SELECT count(*) FROM inventory_snapshot WHERE export_id = %s) AS inventory_snapshot,
+                                (SELECT count(*) FROM distributors) AS distributors,
+                                (SELECT count(*) FROM festival_calendar) AS festival_calendar""",
+                (export_id, export_id))
+
+
+def distributors(conn):
+    return _all(conn, "SELECT * FROM distributors ORDER BY distributor_id")
+
+
+def decision_log(conn):
+    return _all(conn, """SELECT d.*, m.sku_name, r.run_as_of FROM decisions d
+                         JOIN sku_master m USING (sku_id) JOIN runs r USING (run_id)
+                         ORDER BY d.decided_at, d.decision_id""")
+
+
 def sku_history(conn, sku_id, limit=20):
     return _all(conn, """SELECT l.*, r.run_as_of, r.shadow_mode FROM v_lines l JOIN runs r USING (run_id)
                          WHERE l.sku_id = %s ORDER BY l.run_id DESC LIMIT %s""", (sku_id, limit))
