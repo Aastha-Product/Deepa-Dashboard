@@ -6,7 +6,7 @@
   <div class="card" style="margin-top:18px"><h2>No completed run yet</h2></div>
 {% else %}
 
-<div class="sec"><h2>1 · Exceptions <small>cases the rules can't settle on their own (map step 10)</small></h2>
+<div class="sec"><h2>1 · Exceptions <small>cases the rules can't settle on their own; accepting or changing one also approves it (map steps 10–11)</small></h2>
   <span class="small">{{ pending.gate1 }} waiting</span></div>
 {% for l in exceptions %}
 <div class="card" style="margin-bottom:12px;{{ 'border-left:4px solid #6a4bc4' if l.line_status == 'awaiting_gate1' }}">
@@ -37,8 +37,8 @@
         <input type="hidden" name="run_id" value="{{ run.run_id }}"><input type="hidden" name="sku_id" value="{{ l.sku_id }}"><input type="hidden" name="gate" value="1">
         <div class="inline" style="display:flex;gap:6px;flex-wrap:wrap">
           <select name="decision" aria-label="Decision">
-            <option value="accept">Accept{% if l.qty %} {{ l.qty }}{% endif %}</option>
-            <option value="change">Change quantity</option>
+            <option value="accept">{% if l.qty %}Accept and approve {{ l.qty }}{% elif l.action == 'pause' %}Accept and approve the pause{% else %}Accept: no order{% endif %}</option>
+            <option value="change">Change quantity and approve</option>
             <option value="override">Override: don't order</option></select>
           <input type="number" name="final_qty" min="0" placeholder="New qty" aria-label="New quantity" style="width:110px">
         </div>
@@ -55,7 +55,7 @@
 <div class="card small">No exceptions in this run.</div>
 {% endfor %}
 
-<div class="sec"><h2>2 · Approve reorders and pauses <small>check the quantity, then raise the PO in Zoho by hand (map step 11)</small></h2>
+<div class="sec"><h2>2 · Approve reorders and pauses <small>check the quantity; reorders are then raised in Zoho by hand, pauses skip the next order (map step 11)</small></h2>
   {% if approvals %}
   <form method="post" action="/decide/approve-all" onsubmit="return confirm('Approve all {{ approvals|length }} lines at the recommended quantity?')">
     <input type="hidden" name="run_id" value="{{ run.run_id }}">
@@ -87,7 +87,7 @@
 </div>
 
 {% if decided %}
-<div class="sec"><h2>Decided this run <small>approved lines are raised in Zoho by hand; the next run marks them "PO recorded"</small></h2></div>
+<div class="sec"><h2>Decided this run <small>approved reorders are raised in Zoho by hand and the next run marks them "PO recorded"; approved pauses skip the next order</small></h2></div>
 <div class="card scroll" style="padding:6px 10px">
 <table>
   <tr><th>SKU</th><th>Decision</th><th class="n">Qty</th><th>When</th><th>Reason</th><th>Status</th></tr>

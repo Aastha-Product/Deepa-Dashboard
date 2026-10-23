@@ -22,7 +22,7 @@
   'overridden': ('stop', 'Overridden'),
   'no_action': ('', '—')} %}
 {% macro status(l) -%}
-  {%- set s = STATUS[l.line_status] -%}
+  {%- set s = ('done', 'Approved · skip the next order') if l.line_status == 'approved' and l.action == 'pause' else STATUS[l.line_status] -%}
   {%- if s[0] %}<span class="chip {{ s[0] }}">{{ s[1] }}</span>{% else %}<span class="mut">—</span>{% endif -%}
 {%- endmacro %}
 

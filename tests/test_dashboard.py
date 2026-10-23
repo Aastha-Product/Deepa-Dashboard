@@ -147,7 +147,7 @@ def test_overview_changes_since_last_run(app_client, monkeypatch):
 def test_decisions_page_has_both_gates(app_client):
     html = app_client.get("/decisions").text
     assert "1 · Exceptions" in html and "2 · Approve reorders and pauses" in html
-    assert "Record decision" in html and "Accept 750" in html and "+21.4%" in html
+    assert "Record decision" in html and "Accept and approve 750" in html and "+21.4%" in html
     assert html.count('name="gate" value="2"') == 6
     assert "Approve all 6 as recommended" in html and "topped up from 120" in html
 
@@ -167,11 +167,47 @@ def test_gate1_change_needs_reason_and_qty(app_client):
     kind, kw = app_client.recorded[0]
     assert kind == "decision" and kw["final_qty"] == 600 and kw["gate"] == 1 and kw["shadow"] is True
     assert kw["decided_by"] == "Deepa Nair (dashboard)"
+    assert app_client.recorded[1][1]["gate"] == 2 and app_client.recorded[1][1]["decided_by"] == "Deepa Nair (dashboard)"
 
 
-def test_gate1_accept_uses_rules_qty(app_client):
+def decisions_made(client):
+    return [(kw["gate"], kw["decision"], kw["final_qty"]) for x in client.recorded if isinstance(x, tuple)
+            for kind, kw in [x] if kind == "decision"]
+
+
+def test_gate1_accept_also_approves_in_one_step(app_client):
+    r = app_client.post("/decide", data={"run_id": 1, "sku_id": "SKU001", "gate": 1, "decision": "accept"})
+    assert decisions_made(app_client) == [(1, "accept", 750), (2, "approve", 750)]
+    assert "accepted+and+approved+%28order+750%29" in r.headers["location"]
+
+
+def test_gate1_change_also_approves_the_new_qty(app_client):
+    app_client.post("/decide", data={"run_id": 1, "sku_id": "SKU001", "gate": 1, "decision": "change",
+                                     "final_qty": "600", "reason": "Promo ends this week"})
+    assert decisions_made(app_client) == [(1, "change", 600), (2, "approve", 600)]
+
+
+def test_gate1_override_approves_nothing(app_client):
+    app_client.post("/decide", data={"run_id": 1, "sku_id": "SKU001", "gate": 1, "decision": "override",
+                                     "reason": "Competitor scheme ending"})
+    assert decisions_made(app_client) == [(1, "override", 0)]
+
+
+def test_gate1_accept_with_no_order_approves_nothing(app_client, monkeypatch):
+    new_sku = {**next(l for l in LINES if l["sku_id"] == "SKU001"), "exception_type": "new_sku", "action": "review",
+               "qty": 0, "final_qty": 0}
+    monkeypatch.setattr(queries, "line", lambda conn, run_id, sku_id: new_sku)
     app_client.post("/decide", data={"run_id": 1, "sku_id": "SKU001", "gate": 1, "decision": "accept"})
-    assert app_client.recorded[0][1]["final_qty"] == 750
+    assert decisions_made(app_client) == [(1, "accept", 0)]
+
+
+def test_approved_pause_label(app_client, monkeypatch):
+    done = [{**l, "line_status": "approved", "gate2_decision": "approve"} if l["sku_id"] in ("SKU006", "SKU013") else l
+            for l in LINES]
+    monkeypatch.setattr(queries, "lines", lambda conn, run_id, flag=None, **f: done)
+    html = app_client.get("/decisions").text
+    assert "Approved · skip the next order" in html and "Approved · raise PO in Zoho" in html
+    assert html.count("Approved · skip the next order") == 1
 
 
 def test_gate2_approve(app_client):

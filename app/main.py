@@ -255,8 +255,16 @@ def decide(run_id: int = Form(...), sku_id: str = Form(...), gate: int = Form(..
             qty = line["final_qty"] if gate == 2 else line["qty"]
         queries.record_decision(conn, run_id=run_id, sku_id=sku_id, gate=gate, decided_by=user.email,
                                 decision=decision, final_qty=qty, reason=reason, shadow=run["shadow_mode"])
+        # Deepa decides both gates, so accepting or changing an exception also approves its line.
+        # Nothing to approve when the outcome orders nothing (an override, or a qty of 0 on a reorder).
+        also_approved = gate == 1 and decision in ("accept", "change") and (qty > 0 or line["action"] == "pause")
+        if also_approved:
+            queries.record_decision(conn, run_id=run_id, sku_id=sku_id, gate=2, decided_by=user.email,
+                                    decision="approve", final_qty=qty, reason="", shadow=run["shadow_mode"])
         conn.commit()
     what = {"accept": "accepted", "change": "changed", "override": "overridden", "approve": "approved"}[decision]
+    if also_approved:
+        what += f" and approved ({'pause next order' if line['action'] == 'pause' else f'order {qty}'})"
     shadow = " Shadow mode: logged only, nothing is ordered." if run["shadow_mode"] else ""
     return _back("/decisions", f"{sku_id} {what}.{shadow}", run=run_id)
 
