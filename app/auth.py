@@ -31,10 +31,19 @@ class User:
     email: str
     name: str
     role: str
+    roles: dict = None          # every role this login holds -> display name (for the role switcher)
+
+    def __post_init__(self):
+        self.roles = self.roles or {self.role: self.name}
 
     @property
     def role_label(self):
         return ROLE_LABELS.get(self.role, self.role)
+
+    def as_role(self, role: str) -> "User":
+        if role not in self.roles:
+            raise HTTPException(status_code=403, detail="You don't hold that role")
+        return User(self.email, self.roles[role], role, self.roles)
 
 
 class NotSignedIn(Exception):
@@ -83,13 +92,20 @@ def email_from_access_token(token: str, client: httpx.Client = None) -> str:
     return (r.json().get("email") or "").lower()
 
 
+ROLE_ORDER = ["raghav", "procurement", "deepa", "it", "viewer"]
+
+
 def lookup_user(conn, email: str) -> User | None:
-    row = conn.execute("SELECT email, name, role FROM app_users WHERE email = %s", (email.lower(),)).fetchone()
-    return User(*row) if row else None
+    rows = conn.execute("SELECT role, name FROM app_users WHERE email = %s", (email.lower(),)).fetchall()
+    if not rows:
+        return None
+    roles = dict(sorted(rows, key=lambda r: ROLE_ORDER.index(r[0]) if r[0] in ROLE_ORDER else 99))
+    first = next(iter(roles))
+    return User(email.lower(), roles[first], first, roles)
 
 
 def make_cookie(user: User) -> str:
-    return _serializer().dumps({"email": user.email, "name": user.name, "role": user.role})
+    return _serializer().dumps({"email": user.email, "name": user.name, "role": user.role, "roles": user.roles})
 
 
 def current_user(request: Request) -> User:
@@ -105,7 +121,7 @@ def current_user(request: Request) -> User:
         data = _serializer().loads(raw, max_age=MAX_AGE)
     except (BadSignature, SignatureExpired):
         raise NotSignedIn() from None
-    return User(data["email"], data["name"], data["role"])
+    return User(data["email"], data["name"], data["role"], data.get("roles"))
 
 
 def require(user: User, allowed: set) -> None:

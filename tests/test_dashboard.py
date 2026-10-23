@@ -217,6 +217,21 @@ def test_sign_off_refuses_stale_page(app_client, monkeypatch):
     assert "kind=err" in r.headers["location"] and app_client.recorded == []
 
 
+def test_one_login_can_switch_between_its_roles(app_client, monkeypatch):
+    monkeypatch.delenv("DP_DEV_USER", raising=False)
+    monkeypatch.setenv("SESSION_SECRET", "x" * 40)
+    demo = auth.User("demo@example.com", "Raghav (demo)", "raghav",
+                     {"raghav": "Raghav (demo)", "procurement": "Procurement (demo)", "deepa": "Deepa (demo)"})
+    app_client.cookies.set(auth.COOKIE, auth.make_cookie(demo))
+    html = app_client.get("/exceptions").text
+    assert "Act as Deepa (demo)" in html and "Record decision" in html
+    r = app_client.post("/role", data={"role": "procurement"})
+    assert r.status_code == 303
+    app_client.cookies.set(auth.COOKIE, r.cookies[auth.COOKIE])
+    assert "Record decision" not in app_client.get("/exceptions").text      # procurement can't do Gate 1
+    assert app_client.post("/role", data={"role": "it"}).status_code == 403  # not a role this login holds
+
+
 def test_admin_only_for_raghav_and_it(app_client, monkeypatch):
     as_user(monkeypatch, "deepa")
     assert app_client.get("/admin").status_code == 403

@@ -144,6 +144,16 @@ async def auth_session(request: Request):
     return resp
 
 
+@app.post("/role")
+def switch_role(request: Request, role: str = Form(...)):
+    """For a login that holds several roles (the demo): act as another of them."""
+    user = auth.current_user(request).as_role(role)
+    resp = RedirectResponse(request.headers.get("referer") or "/", status_code=303)
+    resp.set_cookie(auth.COOKIE, auth.make_cookie(user), max_age=auth.MAX_AGE, httponly=True,
+                    secure=request.url.scheme == "https", samesite="lax")
+    return resp
+
+
 @app.get("/logout")
 def logout():
     resp = RedirectResponse("/login", status_code=303)
