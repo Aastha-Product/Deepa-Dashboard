@@ -3,6 +3,11 @@
   {%- else -%}{{ l.distributor_name }}{%- endif -%}
 {%- endmacro %}
 
+{% macro days(l) -%}
+  {%- if l.days_left is none %}<span class="mut">—</span>
+  {%- else %}<b style="color:{{ '#c0392b' if l.flag_stockout else 'inherit' }}">{{ l.days_left }}</b> <span class="mut">days</span>{%- endif -%}
+{%- endmacro %}
+
 {% macro flags(l) -%}
   {%- if l.exception_type %}<span class="chip ex">{{ l.exception_type|replace('_', ' ')|capitalize }}</span>{% endif -%}
   {%- if l.flag_stockout %}<span class="chip so">Stockout risk</span>{% endif -%}

@@ -9,6 +9,11 @@
 {% set to_decide = pending.gate1 + pending.gate2 %}
 {% set attention = t.skus - t.ok %}
 
+<nav class="pipe" aria-label="Run pipeline">
+  {% for s in pipeline %}<a href="{{ s.href }}" class="step"><div class="lbl"><span class="pdot {{ s.status }}"></span>{{ s.label }}</div>
+    <div class="val">{{ s.value }}</div><div class="det">{{ s.detail }}</div></a>{% endfor %}
+</nav>
+
 <p class="headline">Run {{ run.run_id }} · {{ run.run_as_of|day }}:
   {{ attention }} of {{ t.skus }} SKUs need attention
   <span class="mut">· {{ t.stockout }} at stockout risk, {{ t.overstock }} overstocked{% if t.exceptions %}, {{ t.exceptions }} exception{{ 's' if t.exceptions != 1 }}{% endif %} ·
@@ -19,6 +24,14 @@
   {% for k, colour, label in seg %}{% if groups[k] %}<span style="width:{{ 100 * groups[k] / t.skus }}%;background:{{ colour }}" title="{{ label }}: {{ groups[k] }}"></span>{% endif %}{% endfor %}
 </div>
 <div class="legend">{% for k, colour, label in seg %}{% if groups[k] %}<span><i style="background:{{ colour }}"></i>{{ label }} {{ groups[k] }}</span>{% endif %}{% endfor %}</div>
+
+{% if briefing %}
+<div class="card" style="margin-top:16px">
+  <div class="sec" style="margin:0 0 10px"><h2>Look at these first <small>from this run's numbers</small></h2></div>
+  <div class="briefs">{% for b in briefing %}
+    <a class="bitem {{ b.kind }}" href="{{ b.href }}"><b>{{ b.title }}</b><span>{{ b.detail }}</span></a>{% endfor %}</div>
+</div>
+{% endif %}
 
 <div class="grid g2" style="margin-top:18px">
   <div class="card" style="border-left:4px solid {{ '#c0392b' if to_decide else '#2e8b57' }}">
@@ -70,18 +83,19 @@
 </div>
 <div class="card scroll" style="padding:6px 10px">
 <table>
-  <tr><th>SKU</th><th>Flag</th><th>Weeks of cover <span class="mut" style="font-weight:400">0 – {{ scale }} w</span></th><th class="n">Cover</th><th class="n">Window</th><th>Recommendation</th><th>Status</th></tr>
+  <tr><th>SKU</th><th>Flag</th><th>Weeks of cover <span class="mut" style="font-weight:400">0 – {{ scale }} w</span></th><th class="n">Days of stock</th><th class="n">Cover</th><th class="n">Window</th><th>Recommendation</th><th>Status</th></tr>
   {% for l in lines %}
   <tr>
     <td><a href="/sku/{{ l.sku_id }}{{ '?run=' ~ run.run_id if run_param }}"><b>{{ l.sku_id }}</b></a> <span class="small">{{ l.sku_name|short }}</span>{% if l.perishability == 'High' %} <span class="chip warn" title="High perishability: 3–4 week window">perishable</span>{% endif %}</td>
     <td>{{ m.flags(l) }}</td>
     <td>{{ m.cover_bar(l, scale) }}</td>
+    <td class="n">{{ m.days(l) }}</td>
     <td class="n"><b>{{ l.cover_weeks|fmtw }} w</b>{% if l.cover_after is not none %}<br><span class="mut">→ {{ l.cover_after|fmtw }} w</span>{% endif %}</td>
     <td class="n mut">{{ l.min_weeks|wk }}–{{ l.max_weeks|wk }} w</td>
     <td>{{ m.action(l) }}</td>
     <td>{{ m.status(l) }}</td>
   </tr>
-  {% else %}<tr><td colspan="7" class="mut">No SKUs in this view.</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="8" class="mut">No SKUs in this view.</td></tr>{% endfor %}
 </table>
 </div>
 <p class="small">Cover = (on hand{% if run.zoho_status == 'ok' %} + open POs{% endif %}) ÷ weekly demand{% if run.festival_month %} incl. the +{{ ((run.uplift - 1) * 100)|round|int }}% festival uplift{% endif %}. Click an SKU for its sales trend and reasoning.</p>

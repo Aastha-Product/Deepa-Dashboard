@@ -3,7 +3,9 @@
 Deepa Nair (Head of Operations) checks the dashboard after each Mon + Thu run. She decides the exceptions
 (Gate 1), approves the reorder and pause lines (Gate 2), signs off the rules and logs write-offs.
 """
+import csv
 import hmac
+import io
 import logging
 import os
 from datetime import datetime
@@ -11,7 +13,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from app import auth, connections, queries
@@ -52,7 +54,7 @@ templates.env.filters.update(
 
 def _page(request, name, conn, tab, run, **ctx):
     params = request.query_params
-    pending = _pending(queries.lines(conn, run["run_id"])) if run else {"gate1": 0, "gate2": 0}
+    pending = _pending(_lines(conn, run["run_id"])) if run else {"gate1": 0, "gate2": 0}
     return templates.TemplateResponse(request, name, {
         "user": auth.current_user(), "tab": tab, "run": run, "latest": queries.latest_run(conn),
         "pending": pending, "run_param": "run" in params, "not_connected": connections.missing_count(),
@@ -73,6 +75,21 @@ def _back(path, msg, kind="ok", **extra):
     return RedirectResponse(f"{path}?{urlencode({**extra, 'msg': msg, 'kind': kind})}", status_code=303)
 
 
+LARGE_ORDER_MULTIPLE = 2      # dashboard check only: an order of 2x standard or more gets a deliberate look
+
+
+def _enrich(l):
+    demand = l.get("demand_weekly")
+    l["days_left"] = round(l["on_hand"] * 7 / demand) if demand else None      # on-hand stock only
+    qty = l.get("final_qty") if l.get("final_qty") is not None else l.get("qty", 0)
+    l["large_order"] = l["action"] == "reorder" and bool(l.get("standard_reorder_qty"))         and qty >= LARGE_ORDER_MULTIPLE * l["standard_reorder_qty"]
+    return l
+
+
+def _lines(conn, run_id, **f):
+    return [_enrich(dict(l)) for l in queries.lines(conn, run_id, **f)]
+
+
 def _flagged(l):
     return bool(l["flag_stockout"] or l["flag_overstock"] or l["flag_high_demand"] or l["exception_type"])
 
@@ -88,6 +105,67 @@ def _changes(lines, prev_lines):
         "cleared": [l for l in prev_lines if before[l["sku_id"]] and not now.get(l["sku_id"], False)],
         "still": sum(now[s] and before.get(s, False) for s in now),
     }
+
+
+def _pipeline(run, latest, lines, version, last_export):
+    """SAP data -> plan run -> rules signed -> decisions -> Zoho export, each with a status."""
+    if not run:
+        return []
+    age = run.get("data_age_hours")
+    to_decide = [l for l in lines if l["exception_type"] or l["action"] in ("reorder", "pause")]
+    waiting = sum(l["line_status"] in ("awaiting_gate1", "awaiting_gate2") for l in to_decide)
+    ready = _approved_reorders(lines)
+    stopped = latest and latest["status"] != "ok" and latest["run_id"] > run["run_id"]
+    exported = last_export and last_export["lines"] >= len(ready) and ready
+    flagged = sum(_flagged(l) for l in lines)
+    return [
+        {"label": "SAP data", "status": "done" if age is not None and age <= 48 else "block", "href": "/admin",
+         "value": f"{age:.0f} h old" if age is not None else "—", "detail": f"stock as of {run['data_as_of']}"},
+        {"label": "Plan run", "status": "block" if stopped else "done", "href": "/",
+         "value": f"{flagged} of {len(lines)} flagged", "detail": "last run stopped" if stopped else f"run {run['run_id']}"},
+        {"label": "Rules sign-off", "status": "done" if version and version.get("signed_off_by") else "block",
+         "href": "/impact", "value": f"version {version['version_id']}" if version else "not loaded",
+         "detail": "signed off" if version and version.get("signed_off_by") else "runs stop until signed"},
+        {"label": "Your decisions", "status": "wait" if waiting else "done", "href": "/decisions",
+         "value": f"{len(to_decide) - waiting} of {len(to_decide)} decided", "detail": f"{waiting} waiting" if waiting else "all decided"},
+        {"label": "Zoho export", "status": "done" if exported else ("wait" if ready else ""), "href": "/decisions#zoho",
+         "value": f"{last_export['lines']} lines" if exported else (f"{len(ready)} ready" if ready else "nothing yet"),
+         "detail": "PO raised by hand in Zoho" if exported else ("download the CSV" if ready else "approve lines first")},
+    ]
+
+
+def _briefing(lines, changes):
+    """The few things to look at first, from the numbers only (no AI, nothing invented)."""
+    out = []
+    stock = sorted((l for l in lines if l["flag_stockout"] and l["days_left"] is not None), key=lambda l: l["days_left"])
+    if stock:
+        low = [l for l in stock if l["days_left"] == stock[0]["days_left"]]
+        names = " and ".join(l["sku_name"].replace("Freshroots ", "") for l in low)
+        open_ = sum(l["line_status"] in ("awaiting_gate1", "awaiting_gate2") for l in low)
+        out.append({"title": f"{names}: {stock[0]['days_left']} days of stock on hand",
+                    "detail": f"{low[0]['cover_weeks']:.1f} weeks of cover against a {low[0]['min_weeks']:g}-week minimum. "
+                              + ("Reorder waiting for you." if open_ else "Reorder approved; raise the PO in Zoho."),
+                    "href": "/decisions" if open_ else "/decisions#zoho", "kind": "so"})
+    for l in (l for l in lines if l["flag_high_demand"]):
+        out.append({"title": f"{l['sku_name'].replace('Freshroots ', '')} is up {l['change_pct']:.0f}%",
+                    "detail": f"Last 4 weeks {l['last4_avg']:.0f}/wk against {l['avg12']:.0f}/wk over 12 weeks, "
+                              f"so the reorder is 1.5x standard ({l['qty']} units).",
+                    "href": f"/sku/{l['sku_id']}", "kind": "hd"})
+    over = [l for l in lines if l["flag_overstock"]]
+    if over:
+        excess = sum(max(l["on_hand"] - l["max_weeks"] * l["demand_weekly"], 0) for l in over if l["demand_weekly"])
+        out.append({"title": f"Pause {len(over)} order{'s' if len(over) != 1 else ''}: about {excess:,.0f} units above the maximum",
+                    "detail": "; ".join(f"{l['sku_name'].replace('Freshroots ', '')} {l['cover_weeks']:.1f} w (max {l['max_weeks']:g})"
+                                        for l in over) + ".", "href": "/?show=overstock", "kind": "ov"})
+    large = [l for l in lines if l["large_order"]]
+    if large:
+        out.append({"title": f"{len(large)} large order{'s' if len(large) != 1 else ''} to check",
+                    "detail": ", ".join(f"{l['sku_id']} {l['final_qty']} ({l['final_qty'] / l['standard_reorder_qty']:.1f}x standard)"
+                                        for l in large) + ". Approve these one by one.", "href": "/decisions", "kind": "ex"})
+    if changes and changes["new"]:
+        out.append({"title": f"{len(changes['new'])} SKU{'s' if len(changes['new']) != 1 else ''} newly flagged since the last run",
+                    "detail": ", ".join(l["sku_id"] for l in changes["new"]) + ".", "href": "/?show=action", "kind": "ex"})
+    return out[:4]
 
 
 # --- cron + health ----------------------------------------------------------------------------
@@ -133,9 +211,9 @@ def overview(request: Request):
     show = request.query_params.get("show", "all")
     with db.connect() as conn:
         run = _selected_run(conn, request)
-        lines = queries.lines(conn, run["run_id"]) if run else []
+        lines = _lines(conn, run["run_id"]) if run else []
         prev = queries.previous_run(conn, run["run_id"]) if run else None
-        changes = _changes(lines, queries.lines(conn, prev["run_id"]) if prev else None)
+        changes = _changes(lines, _lines(conn, prev["run_id"]) if prev else None)
         shown = {
             "action": [l for l in lines if l["line_status"] in ("awaiting_gate1", "awaiting_gate2")],
             "stockout": [l for l in lines if l["flag_stockout"]],
@@ -148,22 +226,28 @@ def overview(request: Request):
         groups = {g: sum(group(l) == g for l in lines) for g in ("exception", "stockout", "overstock", "high_demand", "ok")}
         to_decide = [l for l in lines if l["exception_type"] or l["action"] in ("reorder", "pause")]
         decided = sum(l["line_status"] not in ("awaiting_gate1", "awaiting_gate2") for l in to_decide)
+        version = queries.threshold_version(conn, ts.content_hash)
+        pipeline = _pipeline(run, queries.latest_run(conn), lines, version,
+                             queries.last_zoho_export(conn, run["run_id"]) if run else None)
         return _page(request, "overview.html", conn, "overview", run, lines=shown, all_lines=lines,
+                     pipeline=pipeline, briefing=_briefing(lines, changes),
                      groups=groups, decided=decided, decision_total=len(to_decide),
                      t=queries.tiles(lines), changes=changes, prev=prev, show=show if show in FILTERS else "all",
                      filters=FILTERS, runs=queries.recent_runs(conn), impact=queries.impact(conn),
-                     version=queries.threshold_version(conn, ts.content_hash))
+                     version=version)
 
 
 @app.get("/decisions", response_class=HTMLResponse)
 def decisions(request: Request):
     with db.connect() as conn:
         run = _selected_run(conn, request)
-        lines = queries.lines(conn, run["run_id"]) if run else []
+        lines = _lines(conn, run["run_id"]) if run else []
         return _page(request, "decisions.html", conn, "decisions", run,
                      exceptions=[l for l in lines if l["exception_type"]],
                      approvals=[l for l in lines if l["line_status"] == "awaiting_gate2"],
-                     decided=[l for l in lines if l["line_status"] in ("approved", "po_recorded", "overridden")])
+                     decided=[l for l in lines if l["line_status"] in ("approved", "po_recorded", "overridden")],
+                     export_ready=_approved_reorders(lines),
+                     last_export=queries.last_zoho_export(conn, run["run_id"]) if run else None)
 
 
 # Old tab addresses still work.
@@ -182,6 +266,7 @@ def sku_detail(request: Request, sku_id: str):
             raise HTTPException(status_code=404, detail="Unknown SKU")
         run = _selected_run(conn, request)
         line = queries.line(conn, run["run_id"], sku_id) if run else None
+        line = _enrich(dict(line)) if line else None
         weeks = queries.weekly_sales(conn, run["export_id"], sku_id) if run else []
         names = [w["iso_week"] for w in weeks if w["iso_week"] < _week_of(run)] if run else []
         window = names[-12:]
@@ -286,12 +371,46 @@ def approve_all(run_id: int = Form(...)):
         run = queries.run(conn, run_id)
         if not run:
             return _back("/decisions", "That run no longer exists.", "err")
-        ready = [l for l in queries.lines(conn, run_id) if l["line_status"] == "awaiting_gate2"]
+        ready = [l for l in _lines(conn, run_id) if l["line_status"] == "awaiting_gate2" and not l["large_order"]]
         for l in ready:
             queries.record_decision(conn, run_id=run_id, sku_id=l["sku_id"], gate=2, decided_by=user.email,
                                     decision="approve", final_qty=l["final_qty"], reason="", shadow=run["shadow_mode"])
         conn.commit()
-    return _back("/decisions", f"Approved {len(ready)} line{'s' if len(ready) != 1 else ''} as recommended.", run=run_id)
+    return _back("/decisions", f"Approved {len(ready)} line{'s' if len(ready) != 1 else ''} as recommended."
+                               " Large orders, if any, are left for you to approve one by one.", run=run_id)
+
+
+# --- Zoho export of approved reorder lines (map step 12; the PO is still raised by hand) ------
+
+ZOHO_COLUMNS = ["SKU", "Item Name", "Quantity", "Linked Distributor ID", "Linked Distributor", "Approved At (IST)",
+                "Approved By", "Freshroots Run", "Note"]
+
+
+def _approved_reorders(lines):
+    return [l for l in lines if l["line_status"] in ("approved", "po_recorded") and l["action"] != "pause"
+            and (l["final_qty"] or 0) > 0]
+
+
+@app.get("/decisions/zoho.csv")
+def zoho_export(request: Request):
+    with db.connect() as conn:
+        run = _selected_run(conn, request)
+        if not run:
+            raise HTTPException(status_code=404, detail="No completed run")
+        rows = _approved_reorders(_lines(conn, run["run_id"]))
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(ZOHO_COLUMNS)
+        for l in rows:
+            w.writerow([l["sku_id"], l["sku_name"], l["final_qty"], l["distributor_id"], l["distributor_name"],
+                        _ist(l["gate2_at"]), l["gate2_by"], run["run_id"],
+                        "shadow mode: for checking only" if run["shadow_mode"] else ""])
+        queries.record_zoho_export(conn, run_id=run["run_id"], lines=len(rows),
+                                   units=sum(l["final_qty"] for l in rows), exported_by=auth.current_user().email)
+        conn.commit()
+    name = f"freshroots_run{run['run_id']}_zoho_po_lines.csv"
+    return Response(buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 # --- outcomes (map step 13) -------------------------------------------------------------------

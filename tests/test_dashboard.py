@@ -85,6 +85,8 @@ def app_client(monkeypatch):
         "counts": {"ok_runs": 1, "shadow_runs": 1, "stopped_runs": 0}, "most_overridden": [], "outcomes": []})
     monkeypatch.setattr(queries, "threshold_version", lambda conn, h: None)
     monkeypatch.setattr(queries, "previous_run", lambda conn, run_id: None)
+    monkeypatch.setattr(queries, "last_zoho_export", lambda conn, run_id: None)
+    monkeypatch.setattr(queries, "record_zoho_export", lambda conn, **kw: recorded.append(("zoho_export", kw)))
     monkeypatch.setattr(main.thresholds, "load", lambda conn, ts: (3, True))
     monkeypatch.setattr(main.thresholds, "sign", lambda conn, v, by, actor=None: recorded.append(("sign", v, by, actor)))
     monkeypatch.setattr(queries, "record_decision", lambda conn, **kw: recorded.append(("decision", kw)))
@@ -288,3 +290,52 @@ def test_overview_headline_and_progress(app_client):
     assert "7 of 15 SKUs need attention" in html and "7 decisions waiting" in html
     assert "0 of 7 lines decided this run" in html
     assert "Exception 1" in html and "Stockout risk 4" in html and "Overstock risk 2" in html and "OK 8" in html
+
+
+def approved(skus):
+    return [{**l, "line_status": "approved", "gate2_decision": "approve", "gate2_at": RUN_AS_OF, "gate2_by": "Deepa Nair (dashboard)"}
+            if l["sku_id"] in skus else l for l in LINES]
+
+
+def test_days_of_stock_left(app_client):
+    html = app_client.get("/").text
+    assert "Days of stock" in html
+    # SKU011: 460 on hand / (204.3 x 1.25 / 7 per day) = 13 days; SKU002: 1,200 / (83.8 x 1.25 / 7) = 80 days
+    assert '<b style="color:#c0392b">13</b> <span class="mut">days</span>' in html
+    assert '<b style="color:inherit">80</b>' in html
+
+
+def test_large_order_check_and_approve_all_skips_it(app_client, monkeypatch):
+    big = [{**l, "qty": 300, "final_qty": 300} if l["sku_id"] == "SKU013" else l for l in LINES]   # 2.5x std 120
+    monkeypatch.setattr(queries, "lines", lambda conn, run_id, flag=None, **f: big)
+    html = app_client.get("/decisions").text
+    assert "large order: 2.5&times; standard" in html and "Approve 5 as recommended" in html
+    app_client.post("/decide/approve-all", data={"run_id": 1})
+    skus = {kw["sku_id"] for x in app_client.recorded if isinstance(x, tuple) and x[0] == "decision" for kw in [x[1]]}
+    assert "SKU013" not in skus and len(skus) == 5
+    assert "1 large order to check" in app_client.get("/").text
+
+
+def test_zoho_export_csv(app_client, monkeypatch):
+    monkeypatch.setattr(queries, "lines", lambda conn, run_id, flag=None, **f: approved({"SKU013", "SKU003", "SKU006"}))
+    html = app_client.get("/decisions").text
+    assert "2 approved reorder lines" in html and "Download for Zoho (CSV)" in html
+    r = app_client.get("/decisions/zoho.csv?run=1")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
+    assert 'filename="freshroots_run1_zoho_po_lines.csv"' in r.headers["content-disposition"]
+    rows = r.text.strip().splitlines()
+    assert rows[0].startswith("SKU,Item Name,Quantity")
+    assert len(rows) == 3 and any(row.startswith("SKU013,Freshroots Peanut Butter 300g,161,") for row in rows)
+    assert not any(row.startswith("SKU006") for row in rows)          # a pause isn't a PO
+    assert ("zoho_export", {"run_id": 1, "lines": 2, "units": 470, "exported_by": "Deepa Nair (dashboard)"}) in app_client.recorded
+
+
+def test_pipeline_strip_and_briefing(app_client):
+    html = app_client.get("/").text
+    for label in ("SAP data", "Plan run", "Rules sign-off", "Your decisions", "Zoho export"):
+        assert f"</span>{label}</div>" in html
+    assert "6 h old" in html and "7 of 15 flagged" in html and "0 of 7 decided" in html and "approve lines first" in html
+    assert "Look at these first" in html
+    assert "Multigrain Bread 400g and Almond Milk 500ml: 13 days of stock on hand" in html
+    assert "Mango Drink 200ml is up 21%" in html
+    assert "Pause 2 orders: about 420 units above the maximum" in html

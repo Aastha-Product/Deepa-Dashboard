@@ -125,6 +125,15 @@ def threshold_version(conn, content_hash):
                       "WHERE content_hash = %s", (content_hash,))
 
 
+def last_zoho_export(conn, run_id):
+    return _one(conn, "SELECT * FROM zoho_exports WHERE run_id = %s ORDER BY exported_at DESC LIMIT 1", (run_id,))
+
+
+def record_zoho_export(conn, *, run_id, lines, units, exported_by):
+    conn.execute("INSERT INTO zoho_exports (run_id, lines, units, exported_by) VALUES (%s, %s, %s, %s)",
+                 (run_id, lines, units, exported_by))
+
+
 def record_decision(conn, *, run_id, sku_id, gate, decided_by, decision, final_qty, reason, shadow):
     """Caller commits. The database enforces gate/decision pairs and the required reason."""
     conn.execute("""INSERT INTO decisions (run_id, sku_id, gate, decided_by, decision, final_qty, reason, shadow)

@@ -23,6 +23,7 @@
       <tr><td class="small">Last 4 weeks · 12-week avg</td><td>{{ l.last4_avg|fmt1 }} · {{ l.avg12|fmt1 }} per week ({{ l.change_pct|pct }})</td></tr>
       <tr><td class="small">Weekly demand used</td><td>{{ l.demand_weekly|fmt1 }}{% if l.uplift > 1 %} <span class="mut">incl. +{{ ((l.uplift - 1) * 100)|round|int }}% festival</span>{% endif %}</td></tr>
       <tr><td class="small">On hand · open POs</td><td>{{ l.on_hand|num }} · {% if l.open_po_qty is none %}<span class="mut">unknown</span>{% else %}{{ l.open_po_qty|num }}{% endif %}</td></tr>
+      <tr><td class="small">Days of stock on hand</td><td>{{ m.days(l) }}</td></tr>
       <tr><td class="small">Weeks of cover</td><td><b>{{ l.cover_weeks|fmtw }} w</b>{% if l.cover_after is not none %} → {{ l.cover_after|fmtw }} w after reorder{% endif %}</td></tr>
       <tr><td class="small">Recommendation</td><td>{{ m.action(l) }}</td></tr>
       <tr><td class="small">Standard reorder qty</td><td>{{ sku.standard_reorder_qty }} {{ sku.unit_of_measure|lower }}</td></tr>

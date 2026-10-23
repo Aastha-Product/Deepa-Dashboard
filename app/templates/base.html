@@ -77,6 +77,17 @@ tbody tr:hover td,table tr:hover td{background:#f8fafd}
 .dist span{display:block;height:100%} .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 .progress{height:8px;border-radius:4px;background:#e8ecf4;overflow:hidden;margin:8px 0 4px} .progress span{display:block;height:100%;background:var(--green)}
+.pipe{display:grid;grid-template-columns:repeat(5,1fr);margin:18px 0 0;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.pipe .step{padding:11px 14px;border-right:1px solid var(--line);color:var(--ink)} .pipe .step:last-child{border-right:0}
+.pipe .step:hover{background:#f8fafd;text-decoration:none}
+.pipe .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);display:flex;align-items:center;gap:6px}
+.pipe .val{font-size:16px;font-weight:600;margin-top:2px} .pipe .det{font-size:12px;color:var(--mut)}
+.pdot{width:9px;height:9px;border-radius:50%;background:#c9d1e2;display:inline-block} .pdot.done{background:var(--green)} .pdot.wait{background:#e0a100} .pdot.block{background:var(--red)}
+.briefs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.bitem{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:9px;background:#f6f8fc;border-left:3px solid #c9d1e2;color:var(--ink)}
+.bitem:hover{text-decoration:none;background:#eef2f9} .bitem span{font-size:12.5px;color:var(--ink-2)}
+.bitem.so{border-left-color:var(--red)} .bitem.hd{border-left-color:var(--blue)} .bitem.ov{border-left-color:#d08a1a} .bitem.ex{border-left-color:var(--purple)}
+@media (max-width:860px){.pipe{grid-template-columns:1fr 1fr}.pipe .step{border-bottom:1px solid var(--line)}}
 .check{display:grid;grid-template-columns:22px 1fr;gap:4px 10px;padding:10px 0;border-bottom:1px solid #eef1f7} .check:last-child{border-bottom:0}
 .check .dot{width:12px;height:12px;border-radius:50%;margin-top:4px} .dot.ok{background:var(--green)} .dot.missing{background:#e0a100} .dot.error{background:var(--red)}
 footer{max-width:1440px;margin:0 auto;padding:0 28px 28px;color:var(--mut);font-size:12px}
