@@ -93,26 +93,32 @@ def app_client(monkeypatch):
     return c
 
 
-def as_user(monkeypatch, role):
-    monkeypatch.setenv("DP_DEV_USER", f"{role}@example.com,{role.title()},{role}")
-    monkeypatch.delenv("VERCEL", raising=False)
+def as_user(client, role):
+    client.cookies.set(auth.COOKIE, role)
 
 
-def test_not_signed_in_goes_to_login(app_client, monkeypatch):
-    monkeypatch.delenv("DP_DEV_USER", raising=False)
+def test_no_sign_in_needed(app_client):
     r = app_client.get("/")
-    assert r.status_code == 303 and r.headers["location"] == "/login"
-    assert "Email me a sign-in link" in app_client.get("/login").text
+    assert r.status_code == 200 and "Acting as" in r.text and "Raghav Kulkarni" in r.text
+    assert app_client.get("/login").status_code == 404
 
 
-def test_dev_login_never_works_on_vercel(app_client, monkeypatch):
-    as_user(monkeypatch, "raghav")
-    monkeypatch.setenv("VERCEL", "1")
-    assert app_client.get("/").status_code == 303
+def test_role_picker_switches_role(app_client):
+    r = app_client.post("/role", data={"role": "procurement"}, headers={"referer": "/exceptions"})
+    assert r.status_code == 303 and r.headers["location"] == "/exceptions"
+    app_client.cookies.set(auth.COOKIE, r.cookies[auth.COOKIE])
+    html = app_client.get("/exceptions").text
+    assert "Record decision" not in html and '<option value="procurement" selected>' in html
+    assert app_client.post("/role", data={"role": "admin"}).status_code == 400
+
+
+def test_unknown_role_cookie_falls_back_to_raghav(app_client):
+    as_user(app_client, "hacker")
+    assert "Record decision" in app_client.get("/exceptions").text
 
 
 def test_summary_tab_matches_golden_run(app_client, monkeypatch):
-    as_user(monkeypatch, "deepa")
+    as_user(app_client, "deepa")
     html = app_client.get("/").text
     for n, label in [(15, "SKUs checked"), (5, "Stockout risk"), (2, "Overstock risk"), (1, "High demand"),
                      (1, "Exceptions for Raghav"), (5, "Reorder lines"), (8, "OK, no action")]:
@@ -123,16 +129,16 @@ def test_summary_tab_matches_golden_run(app_client, monkeypatch):
 
 
 def test_exceptions_tab_and_gate1_only_for_raghav(app_client, monkeypatch):
-    as_user(monkeypatch, "procurement")
+    as_user(app_client, "procurement")
     html = app_client.get("/exceptions").text
     assert "SKU001" in html and "Conflicting flags" in html and "Record decision" not in html
-    as_user(monkeypatch, "raghav")
+    as_user(app_client, "raghav")
     html = app_client.get("/exceptions").text
     assert "Record decision" in html and "Accept 750" in html and "+21.4%" in html
 
 
 def test_procurement_tab_lists_reorders_and_pauses(app_client, monkeypatch):
-    as_user(monkeypatch, "procurement")
+    as_user(app_client, "procurement")
     html = app_client.get("/procurement").text
     for sku in ("SKU001", "SKU003", "SKU004", "SKU011", "SKU013", "SKU006", "SKU007"):
         assert sku in html
@@ -141,21 +147,21 @@ def test_procurement_tab_lists_reorders_and_pauses(app_client, monkeypatch):
 
 
 def test_sku_tab_draws_chart_without_in_progress_week(app_client, monkeypatch):
-    as_user(monkeypatch, "viewer")
+    as_user(app_client, "viewer")
     html = app_client.get("/sku/SKU001").text
     assert "<svg" in html and "12-week window" in html and "last 4 weeks" in html
     assert "2026-W27" in html and "2026-W42" in html and "+20% line 258" in html
 
 
 def test_impact_tab(app_client, monkeypatch):
-    as_user(monkeypatch, "deepa")
+    as_user(app_client, "deepa")
     html = app_client.get("/impact").text
     assert "75%" in html and "25%" in html and "₹18–22L" in html and "Draft · Deepa to confirm" in html
     assert "Raghav or procurement can log write-offs" in html
 
 
 def test_gate1_change_needs_reason_and_qty(app_client, monkeypatch):
-    as_user(monkeypatch, "raghav")
+    as_user(app_client, "raghav")
     form = {"run_id": 1, "sku_id": "SKU001", "gate": 1, "decision": "change", "final_qty": "600", "reason": ""}
     r = app_client.post("/decide", data=form)
     assert r.status_code == 303 and "kind=err" in r.headers["location"] and "reason+is+required" in r.headers["location"]
@@ -163,35 +169,35 @@ def test_gate1_change_needs_reason_and_qty(app_client, monkeypatch):
     assert "kind=ok" in r.headers["location"]
     kind, kw = app_client.recorded[0]
     assert kind == "decision" and kw["final_qty"] == 600 and kw["gate"] == 1 and kw["shadow"] is True
-    assert kw["decided_by"] == "raghav@example.com"
+    assert kw["decided_by"] == "Raghav Kulkarni (dashboard)"
 
 
 def test_gate1_accept_uses_rules_qty(app_client, monkeypatch):
-    as_user(monkeypatch, "raghav")
+    as_user(app_client, "raghav")
     app_client.post("/decide", data={"run_id": 1, "sku_id": "SKU001", "gate": 1, "decision": "accept"})
     assert app_client.recorded[0][1]["final_qty"] == 750
 
 
 def test_gate2_by_wrong_role_is_forbidden(app_client, monkeypatch):
-    as_user(monkeypatch, "raghav")
+    as_user(app_client, "raghav")
     r = app_client.post("/decide", data={"run_id": 1, "sku_id": "SKU013", "gate": 2, "decision": "approve"})
     assert r.status_code == 403 and app_client.recorded == []
 
 
 def test_gate2_approve(app_client, monkeypatch):
-    as_user(monkeypatch, "procurement")
+    as_user(app_client, "procurement")
     r = app_client.post("/decide", data={"run_id": 1, "sku_id": "SKU013", "gate": 2, "decision": "approve"})
     assert "kind=ok" in r.headers["location"] and app_client.recorded[0][1]["final_qty"] == 161
 
 
 def test_gate2_refuses_line_still_at_gate1(app_client, monkeypatch):
-    as_user(monkeypatch, "procurement")
+    as_user(app_client, "procurement")
     r = app_client.post("/decide", data={"run_id": 1, "sku_id": "SKU001", "gate": 2, "decision": "approve"})
     assert "kind=err" in r.headers["location"] and app_client.recorded == []
 
 
 def test_write_off_validation(app_client, monkeypatch):
-    as_user(monkeypatch, "procurement")
+    as_user(app_client, "procurement")
     r = app_client.post("/outcomes", data={"sku_id": "SKU007", "iso_week": "W43", "units": 5})
     assert "kind=err" in r.headers["location"]
     r = app_client.post("/outcomes", data={"sku_id": "SKU007", "iso_week": "2026-W43", "units": 5})
@@ -199,41 +205,26 @@ def test_write_off_validation(app_client, monkeypatch):
 
 
 def test_sign_off_only_for_deepa(app_client, monkeypatch):
-    as_user(monkeypatch, "raghav")
+    as_user(app_client, "raghav")
     html = app_client.get("/impact").text
     assert "Not signed off" in html and "Runs stop until Deepa Nair signs it off" in html and "Sign off these rules" not in html
     h = main.thresholds.read().content_hash
     assert app_client.post("/thresholds/sign", data={"content_hash": h}).status_code == 403
-    as_user(monkeypatch, "deepa")
+    as_user(app_client, "deepa")
     assert "Sign off these rules as Deepa Nair" in app_client.get("/impact").text
     r = app_client.post("/thresholds/sign", data={"content_hash": h})
     assert "kind=ok" in r.headers["location"]
-    assert app_client.recorded[0] == ("sign", 3, "Deepa Nair", "deepa@example.com")
+    assert app_client.recorded[0] == ("sign", 3, "Deepa Nair", "dashboard")
 
 
 def test_sign_off_refuses_stale_page(app_client, monkeypatch):
-    as_user(monkeypatch, "deepa")
+    as_user(app_client, "deepa")
     r = app_client.post("/thresholds/sign", data={"content_hash": "old"})
     assert "kind=err" in r.headers["location"] and app_client.recorded == []
 
 
-def test_one_login_can_switch_between_its_roles(app_client, monkeypatch):
-    monkeypatch.delenv("DP_DEV_USER", raising=False)
-    monkeypatch.setenv("SESSION_SECRET", "x" * 40)
-    demo = auth.User("demo@example.com", "Raghav (demo)", "raghav",
-                     {"raghav": "Raghav (demo)", "procurement": "Procurement (demo)", "deepa": "Deepa (demo)"})
-    app_client.cookies.set(auth.COOKIE, auth.make_cookie(demo))
-    html = app_client.get("/exceptions").text
-    assert "Act as Deepa (demo)" in html and "Record decision" in html
-    r = app_client.post("/role", data={"role": "procurement"})
-    assert r.status_code == 303
-    app_client.cookies.set(auth.COOKIE, r.cookies[auth.COOKIE])
-    assert "Record decision" not in app_client.get("/exceptions").text      # procurement can't do Gate 1
-    assert app_client.post("/role", data={"role": "it"}).status_code == 403  # not a role this login holds
-
-
 def test_admin_only_for_raghav_and_it(app_client, monkeypatch):
-    as_user(monkeypatch, "deepa")
+    as_user(app_client, "deepa")
     assert app_client.get("/admin").status_code == 403
-    as_user(monkeypatch, "it")
+    as_user(app_client, "it")
     assert "Upload an SAP export" in app_client.get("/admin").text

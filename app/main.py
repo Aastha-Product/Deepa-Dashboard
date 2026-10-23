@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app import auth, queries
@@ -48,11 +48,6 @@ templates.env.filters.update(
 
 
 # --- helpers ----------------------------------------------------------------------------------
-
-@app.exception_handler(auth.NotSignedIn)
-def _to_login(request: Request, exc):
-    return RedirectResponse("/login", status_code=303)
-
 
 def _page(request, name, conn, user, tab, run, **ctx):
     params = request.query_params
@@ -101,63 +96,16 @@ def scheduled_run(authorization: str | None = Header(default=None)):
     return summary.as_dict()
 
 
-# --- sign-in ----------------------------------------------------------------------------------
-
-@app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
-    err = request.query_params.get("error")
-    return templates.TemplateResponse(request, "login.html", {"message": err, "kind": "err"} if err else {})
-
-
-@app.post("/login", response_class=HTMLResponse)
-def login_send(request: Request, email: str = Form(...)):
-    email = email.strip().lower()
-    try:
-        with db.connect() as conn:
-            known = auth.lookup_user(conn, email) is not None
-        if known:
-            auth.send_login_link(email, str(request.base_url).rstrip("/") + "/auth/callback")
-    except Exception as exc:  # noqa: BLE001
-        log.warning("login link failed: %s", exc)
-        return templates.TemplateResponse(request, "login.html", {"message": "Couldn't send the link right now. Try again in a minute.", "kind": "err"})
-    # Same answer either way, so the page doesn't reveal who has access.
-    return templates.TemplateResponse(request, "login.html", {
-        "message": "If that email has access, a sign-in link is on its way. It works once.", "kind": "ok"})
-
-
-@app.get("/auth/callback", response_class=HTMLResponse)
-def auth_callback(request: Request):
-    return templates.TemplateResponse(request, "login.html", {"script": True})
-
-
-@app.post("/auth/session")
-async def auth_session(request: Request):
-    body = await request.json()
-    email = auth.email_from_access_token(str(body.get("access_token", "")))
-    with db.connect() as conn:
-        user = auth.lookup_user(conn, email)
-    if not user:
-        raise HTTPException(status_code=403, detail="This email isn't on the dashboard access list.")
-    resp = JSONResponse({"ok": True})
-    resp.set_cookie(auth.COOKIE, auth.make_cookie(user), max_age=auth.MAX_AGE, httponly=True,
-                    secure=request.url.scheme == "https", samesite="lax")
-    return resp
-
+# --- acting role (no sign-in) -----------------------------------------------------------------
 
 @app.post("/role")
 def switch_role(request: Request, role: str = Form(...)):
-    """For a login that holds several roles (the demo): act as another of them."""
-    user = auth.current_user(request).as_role(role)
+    """The header's "Acting as" picker."""
+    if role not in auth.ROLES:
+        raise HTTPException(status_code=400, detail="Unknown role")
     resp = RedirectResponse(request.headers.get("referer") or "/", status_code=303)
-    resp.set_cookie(auth.COOKIE, auth.make_cookie(user), max_age=auth.MAX_AGE, httponly=True,
+    resp.set_cookie(auth.COOKIE, role, max_age=auth.MAX_AGE, httponly=True,
                     secure=request.url.scheme == "https", samesite="lax")
-    return resp
-
-
-@app.get("/logout")
-def logout():
-    resp = RedirectResponse("/login", status_code=303)
-    resp.delete_cookie(auth.COOKIE)
     return resp
 
 
@@ -248,7 +196,7 @@ def sign_thresholds(request: Request, content_hash: str = Form(...)):
     with db.connect() as conn:
         version_id, _ = thresholds.load(conn, ts)
         try:
-            thresholds.sign(conn, version_id, thresholds.signer_name(ts.sign_off_by), actor=user.email)
+            thresholds.sign(conn, version_id, thresholds.signer_name(ts.sign_off_by), actor="dashboard")
         except thresholds.ThresholdsError as exc:
             return _back("/impact", str(exc), "err")
         conn.commit()

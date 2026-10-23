@@ -20,11 +20,14 @@ Plan: `../03-build-implementation-plan.md` · Components map: `Freshroots_Compon
 | P9 | Gate 1 / Gate 2 forms, write-offs, impact | `app/main.py`, `app/queries.py` |
 
 ## Dashboard access
-Sign-in is by email link (Supabase Auth). A person needs both:
-1. A Supabase Auth user: Supabase → Authentication → Users → **Add user → Send invite**.
-2. A row in the `app_users` table: email (lowercase), name, and role `raghav`, `procurement`, `deepa`, `it` or `viewer`.
+There is no sign-in. Pick a role in the header's **Acting as** menu:
+- **Raghav Kulkarni:** Gate 1 decisions, Run now, export upload
+- **Procurement team:** Gate 2 approvals
+- **Deepa Nair:** rules sign-off
+- **IT team:** Run now, export upload
+- **Viewer:** read only
 
-In Supabase → Authentication → URL Configuration, set the **Site URL** to `https://deepa-dashboard.vercel.app` and add `https://deepa-dashboard.vercel.app/auth/callback` to the redirect URLs.
+Each role only gets its own buttons, and every decision records the role that made it. Anyone with the link can pick any role, so share it only with the people involved. The scheduled `/api/run` is still protected by `CRON_SECRET`.
 
 ## Layout
 | Path | What |
