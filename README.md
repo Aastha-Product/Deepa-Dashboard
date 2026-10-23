@@ -19,15 +19,18 @@ Plan: `../03-build-implementation-plan.md` · Components map: `Freshroots_Compon
 | P8 | Summary email + IT alert | `job/notify.py` |
 | P9 | Gate 1 / Gate 2 forms, write-offs, impact | `app/main.py`, `app/queries.py` |
 
-## Dashboard access
-There is no sign-in. Pick a role in the header's **Acting as** menu:
-- **Raghav Kulkarni:** Gate 1 decisions, Run now, export upload
-- **Procurement team:** Gate 2 approvals
-- **Deepa Nair:** rules sign-off
-- **IT team:** Run now, export upload
-- **Viewer:** read only
+## Dashboard
+The dashboard is **Deepa Nair's** (Head of Operations), who checks it after each Mon + Thu 06:00 run. There's no sign-in and no role picker. Every decision is recorded as "Deepa Nair (dashboard)".
 
-Each role only gets its own buttons, and every decision records the role that made it. Anyone with the link can pick any role, so share it only with the people involved. The scheduled `/api/run` is still protected by `CRON_SECRET`.
+| Page | What Deepa does there |
+|---|---|
+| **Overview** | Sees what needs her decision, what changed since the last run, every SKU's weeks of cover against its window, and an impact snapshot |
+| **Decisions** | Gate 1: accepts, changes or overrides exceptions (a reason is needed to change). Gate 2: approves reorder and pause lines, one by one or all at once. Approved lines are raised in Zoho by hand. |
+| **SKU detail** | 16-week sales chart, the rule trace, the reason and the history for one SKU |
+| **Impact & rules** | Signs off the rules (map step 0), tracks acceptance and override rates, kill criteria, and logs write-offs |
+| **Data & runs** | Uploads an export and runs now (with an optional demo replay time) |
+
+Anyone with the link can use the dashboard, so share it only with Deepa. The scheduled `/api/run` is protected by `CRON_SECRET`.
 
 ## Layout
 | Path | What |

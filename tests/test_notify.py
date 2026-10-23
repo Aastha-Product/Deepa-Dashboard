@@ -35,7 +35,7 @@ def test_summary_email(smtp):
     assert msg["To"] == "raghav@x.in, proc@x.in, deepa@x.in"
     assert "[SHADOW MODE]" in msg["Subject"] and "5 stockout" in msg["Subject"]
     body = msg.get_body(("plain",)).get_content()
-    assert "SKU001 750, SKU013 161" in body and "Exceptions for Raghav (Gate 1): SKU001" in body
+    assert "SKU001 750, SKU013 161" in body and "Exceptions to decide: SKU001" in body
 
 
 def test_stale_run_alerts_it(smtp):

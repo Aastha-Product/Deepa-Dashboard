@@ -1,8 +1,0 @@
-{% extends "base.html" %}
-{% block title %}Switch role{% endblock %}
-{% block body %}
-<div class="card">
-  <b>This page is for {{ allowed|join(' or ') }}.</b>
-  <p class="small">You're acting as {{ user.name }} ({{ user.role_label }}). Pick {{ allowed|join(' or ') }} in the <b>Acting as</b> menu at the top right to continue, or go back to the <a href="/">run summary</a>.</p>
-</div>
-{% endblock %}

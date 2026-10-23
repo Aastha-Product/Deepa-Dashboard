@@ -1,4 +1,6 @@
 """Reads and writes behind the dashboard. Everything goes through the views in the dashboard migration."""
+from decimal import Decimal
+
 from psycopg.rows import dict_row
 
 FLAG_FILTERS = {
@@ -8,14 +10,19 @@ FLAG_FILTERS = {
 }
 
 
+def _plain(row):
+    # NUMERIC comes back as Decimal; templates mix it with floats, so hand them floats.
+    return None if row is None else {k: float(v) if isinstance(v, Decimal) else v for k, v in row.items()}
+
+
 def _all(conn, sql, params=()):
     with conn.cursor(row_factory=dict_row) as cur:
-        return cur.execute(sql, params).fetchall()
+        return [_plain(r) for r in cur.execute(sql, params).fetchall()]
 
 
 def _one(conn, sql, params=()):
     with conn.cursor(row_factory=dict_row) as cur:
-        return cur.execute(sql, params).fetchone()
+        return _plain(cur.execute(sql, params).fetchone())
 
 
 def latest_run(conn):
@@ -30,6 +37,10 @@ def run(conn, run_id=None):
 
 def all_runs(conn, limit=15):
     return _all(conn, "SELECT * FROM runs ORDER BY run_id DESC LIMIT %s", (limit,))
+
+
+def previous_run(conn, run_id):
+    return _one(conn, "SELECT * FROM runs WHERE status = 'ok' AND run_id < %s ORDER BY run_id DESC LIMIT 1", (run_id,))
 
 
 def recent_runs(conn, limit=20):

@@ -1,72 +1,68 @@
 {% extends "base.html" %}
-{% block title %}Impact &amp; rule review{% endblock %}
+{% block title %}Impact &amp; rules{% endblock %}
 {% block body %}
 {% set s = impact.stats %}{% set o = impact.totals %}{% set c = impact.counts %}
-<div class="sec">Rules sign-off · map step 0</div>
-<div class="card">
+
+<div class="sec"><h2>Rules sign-off <small>map step 0: you sign off Raghav's rules before any run uses them</small></h2></div>
+<div class="card" style="border-left:4px solid {{ '#2e8b57' if version and version.signed_off_by else '#c0392b' }}">
   {% if version and version.signed_off_by %}
-    <span class="chip ok">Signed off</span> Thresholds version <b>{{ version.version_id }}</b> was signed off by {{ version.signed_off_by }} on {{ version.signed_off_at|ist }}. Runs use it.
+    <span class="chip done">Signed off</span> Rules version <b>{{ version.version_id }}</b>, signed off by {{ version.signed_off_by }} on {{ version.signed_off_at|ist }}. Runs use it.
   {% else %}
-    <span class="chip so">Not signed off</span> {% if version %}Version <b>{{ version.version_id }}</b> is loaded but{% else %}The current rules file{% endif %} isn't signed off yet. <b>Runs stop until {{ signer }} signs it off.</b>
+    <span class="chip stop">Not signed off</span> {% if version %}Version <b>{{ version.version_id }}</b> is loaded but{% else %}The current rules{% endif %} {{ 'is' if version else 'are' }} not signed off. <b>Runs stop until you sign off.</b>
   {% endif %}
-  <details style="margin-top:8px"><summary class="small">Show the rules and numbers being signed off</summary>
+  <details style="margin-top:10px"><summary class="small">The rules and numbers{{ ' being signed off' if not (version and version.signed_off_by) }}</summary>
     <table class="small" style="margin-top:6px">
       <tr><td>High demand</td><td>last {{ ts.values['rules.high_demand.short_window_weeks'] }} weeks more than {{ ts.values['rules.high_demand.threshold_pct'] }}% above the {{ ts.values['rules.high_demand.long_window_weeks'] }}-week average → reorder {{ ts.values['rules.high_demand.reorder_multiplier'] }} &times; standard</td></tr>
-      <tr><td>Stockout / overstock</td><td>below {{ ts.values['rules.cover_windows.standard.min_weeks'] }} / above {{ ts.values['rules.cover_windows.standard.max_weeks'] }} weeks of cover (high perishability {{ ts.values['rules.cover_windows.high_perishability.min_weeks'] }}–{{ ts.values['rules.cover_windows.high_perishability.max_weeks'] }})</td></tr>
-      <tr><td>Festival months</td><td>{{ ts.values['rules.festival.months']|join(', ') }} (month numbers): +{{ ts.values['rules.festival.uplift_pct'] }}% before any threshold check</td></tr>
-      <tr><td>Added rule A</td><td>stockout qty topped up to the minimum cover, never above the maximum (pending Raghav's sign-off)</td></tr>
-      <tr><td>Added rules B–C</td><td>exceptions to Raghav; stop if data is over {{ ts.values['data_checks.stale_after_hours'] }} h old</td></tr>
+      <tr><td>Stockout / overstock</td><td>below {{ ts.values['rules.cover_windows.standard.min_weeks'] }} / above {{ ts.values['rules.cover_windows.standard.max_weeks'] }} weeks of cover; high perishability {{ ts.values['rules.cover_windows.high_perishability.min_weeks'] }}–{{ ts.values['rules.cover_windows.high_perishability.max_weeks'] }} weeks</td></tr>
+      <tr><td>Festival months</td><td>March, October, November: +{{ ts.values['rules.festival.uplift_pct'] }}% demand before any threshold check</td></tr>
+      <tr><td>Added rule A</td><td>stockout quantity topped up to the minimum cover, never above the maximum (pending Raghav's confirmation)</td></tr>
+      <tr><td>Added rules B–C</td><td>exceptions come to you; a run stops if data is over {{ ts.values['data_checks.stale_after_hours'] }} h old</td></tr>
       <tr><td>Written by</td><td>{{ ts.written_by }} · content hash {{ ts.content_hash[:12] }}</td></tr>
     </table>
   </details>
-  {% if can_sign and not (version and version.signed_off_by) %}
-  <form method="post" action="/thresholds/sign" style="margin-top:10px"><input type="hidden" name="content_hash" value="{{ ts.content_hash }}">
+  {% if not (version and version.signed_off_by) %}
+  <form method="post" action="/thresholds/sign" style="margin-top:12px"><input type="hidden" name="content_hash" value="{{ ts.content_hash }}">
     <button class="btn" type="submit">Sign off these rules as {{ signer }}</button></form>
   {% endif %}
 </div>
 
-<div class="sec">Impact &amp; rule review · Deepa · quarterly rule review</div>
+<div class="sec"><h2>Impact <small>tracked in units; the SAP export has no price per SKU</small></h2></div>
 <div class="tiles">
-  <div class="tile"><div class="n">{{ s.accepted|rate(s.all_decisions) }}</div><div class="l">Acceptance rate · {{ s.all_decisions }} decisions</div></div>
-  <div class="tile"><div class="n {{ 'r' if s.all_decisions and s.overridden / s.all_decisions > 0.2 }}">{{ s.overridden|rate(s.all_decisions) }}</div><div class="l">Override rate · every override has a reason</div></div>
+  <div class="tile"><div class="n">{{ s.accepted|rate(s.all_decisions) }}</div><div class="l">Accepted as recommended</div><div class="s">{{ s.all_decisions }} decisions · {{ s.shadow_decisions }} in shadow mode</div></div>
+  <div class="tile"><div class="n {{ 'r' if s.all_decisions and s.overridden / s.all_decisions > 0.2 }}">{{ s.overridden|rate(s.all_decisions) }}</div><div class="l">Changed or overridden</div><div class="s">each with a reason</div></div>
   <div class="tile"><div class="n r">{{ o.stockout_incidents }}</div><div class="l">Stockout incidents logged</div></div>
-  <div class="tile"><div class="n o">{{ o.units_written_off|num }}</div><div class="l">Units written off (overstock)</div></div>
-  <div class="tile"><div class="n">{{ c.ok_runs }}</div><div class="l">Completed runs · {{ c.shadow_runs }} in shadow mode</div></div>
-  <div class="tile"><div class="n">{{ c.stopped_runs }}</div><div class="l">Runs stopped (stale data, unsigned rules, errors)</div></div>
+  <div class="tile"><div class="n o">{{ o.units_written_off|num }}</div><div class="l">Units written off</div></div>
+  <div class="tile"><div class="n">{{ c.ok_runs }}</div><div class="l">Completed runs</div><div class="s">{{ c.shadow_runs }} in shadow · {{ c.stopped_runs }} stopped</div></div>
 </div>
-<div class="sec">Baseline from the case</div>
-<div class="tiles">
-  <div class="tile"><div class="n r">₹18–22L</div><div class="l">Stockout loss per quarter</div></div>
-  <div class="tile"><div class="n o">₹10–12L</div><div class="l">Overstock write-offs per quarter</div></div>
-  <div class="tile"><div class="n b" style="font-size:20px">Monthly → Mon + Thu</div><div class="l">Forecast cycle (was 2 working days a month)</div></div>
+<div class="tiles" style="margin-top:12px">
+  <div class="tile"><div class="n r">₹18–22L</div><div class="l">Stockout loss per quarter</div><div class="s">case baseline</div></div>
+  <div class="tile"><div class="n o">₹10–12L</div><div class="l">Overstock write-offs per quarter</div><div class="s">case baseline</div></div>
+  <div class="tile"><div class="n b" style="font-size:20px">Monthly → Mon + Thu</div><div class="l">Forecast cycle</div><div class="s">was 2 working days a month</div></div>
 </div>
-<p class="small">Outcomes are tracked in units: the SAP export has no price per SKU, so ₹ per SKU switches on only if a price column is added.</p>
 
-<div class="grid2">
+<div class="grid g2" style="margin-top:14px">
 <div class="card">
-  <b>Kill criteria</b> <span class="chip warn">Draft · Deepa to confirm</span>
+  <h3>Kill criteria <span class="chip warn">Draft, yours to confirm</span></h3>
   <ol class="small">
-    <li>After shadow mode, an override rate above <b>20%</b> means the rules don't match Raghav's judgment. Stop and rework. (Raghav estimates the rules cover 80–85% of decisions.) Now: <b>{{ s.overridden|rate(s.all_decisions) }}</b>.</li>
-    <li>By <b>day 90</b>, stockout and write-off units not below the shadow-period level means the approach needs rethinking.</li>
+    <li>After shadow mode, if more than <b>20%</b> of recommendations are changed or overridden, the rules don't match Raghav's judgment: stop and rework. (Raghav estimates they cover 80–85%.) Now: <b>{{ s.overridden|rate(s.all_decisions) }}</b>.</li>
+    <li>By <b>day 90</b>, if stockout and write-off units aren't below the shadow-period level, rethink the approach.</li>
   </ol>
-  <b>Most overridden SKUs</b>
-  <ul class="small">{% for r in impact.most_overridden %}<li><a href="/sku/{{ r.sku_id }}">{{ r.sku_id }}</a> · {{ r.n }} change/override{{ 's' if r.n != 1 }}</li>{% else %}<li class="mut">None yet.</li>{% endfor %}</ul>
+  <h3 style="margin-top:12px">Most changed SKUs</h3>
+  <ul class="small">{% for r in impact.most_overridden %}<li><a href="/sku/{{ r.sku_id }}">{{ r.sku_id }}</a> · {{ r.n }} change{{ 's' if r.n != 1 }}/override{{ 's' if r.n != 1 }}</li>{% else %}<li class="mut">None yet.</li>{% endfor %}</ul>
 </div>
 <div class="card">
-  <b>Log a write-off</b> <span class="small">(map step 13)</span>
-  {% if can_log %}
+  <h3>Log a write-off <span class="small">(map step 13)</span></h3>
   <form method="post" action="/outcomes" class="inline" style="margin-top:8px">
-    <select name="sku_id" aria-label="SKU">{% for s2 in all_skus %}<option value="{{ s2.sku_id }}">{{ s2.sku_id }} · {{ s2.sku_name|replace('Freshroots ', '') }}</option>{% endfor %}</select>
+    <select name="sku_id" aria-label="SKU">{% for s2 in all_skus %}<option value="{{ s2.sku_id }}">{{ s2.sku_id }} · {{ s2.sku_name|short }}</option>{% endfor %}</select>
     <input type="text" name="iso_week" placeholder="2026-W43" pattern="\d{4}-W\d{2}" required aria-label="ISO week" style="width:100px">
     <input type="number" name="units" min="1" placeholder="Units" required aria-label="Units" style="width:90px">
-    <input type="text" name="note" placeholder="Note (optional)" aria-label="Note" style="flex:1;min-width:160px">
+    <input type="text" name="note" placeholder="Note (optional)" aria-label="Note" style="flex:1;min-width:150px">
     <button class="btn" type="submit">Log</button>
   </form>
-  {% else %}<p class="small">Raghav or procurement can log write-offs.</p>{% endif %}
   <table style="margin-top:10px">
-    <tr><th>When</th><th>SKU</th><th>Week</th><th>Event</th><th class="n">Units</th><th>By</th></tr>
-    {% for e in impact.outcomes %}<tr><td class="small">{{ e.logged_at|ist }}</td><td>{{ e.sku_id }}</td><td>{{ e.iso_week }}</td><td>{{ e.event|replace('_', '-') }}</td><td class="n">{{ e.units }}</td><td class="small">{{ e.logged_by }}</td></tr>
-    {% else %}<tr><td colspan="6" class="mut">Nothing logged yet.</td></tr>{% endfor %}
+    <tr><th>When</th><th>SKU</th><th>Week</th><th>Event</th><th class="n">Units</th></tr>
+    {% for e in impact.outcomes %}<tr><td class="small">{{ e.logged_at|ist }}</td><td>{{ e.sku_id }}</td><td>{{ e.iso_week }}</td><td>{{ e.event|replace('_', '-') }}</td><td class="n">{{ e.units }}</td></tr>
+    {% else %}<tr><td colspan="5" class="mut">Nothing logged yet. Stockouts are logged automatically when a run sees zero stock.</td></tr>{% endfor %}
   </table>
 </div>
 </div>

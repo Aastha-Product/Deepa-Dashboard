@@ -2,41 +2,43 @@
 {% import "_macros.html" as m %}
 {% block title %}{{ sku.sku_id }}{% endblock %}
 {% block body %}
-<form class="filters" method="get" onsubmit="location.href='/sku/'+this.sku.value+'{{ '?run=' ~ run.run_id if run_param else '' }}';return false">
-  <select name="sku" aria-label="SKU">{% for s in all_skus %}<option value="{{ s.sku_id }}" {{ 'selected' if s.sku_id == sku.sku_id }}>{{ s.sku_id }} · {{ s.sku_name|replace('Freshroots ', '') }}</option>{% endfor %}</select>
-  <button class="btn ghost" type="submit">Show</button>
-</form>
-<div class="sec">SKU detail · {{ sku.sku_id }} {{ sku.sku_name|replace('Freshroots ', '') }}</div>
-<div class="grid2">
+<div class="sec">
+  <h2>{{ sku.sku_id }} · {{ sku.sku_name|short }} <small>{{ sku.category }} · {{ sku.perishability }} perishability · {{ sku.distributor_name }}</small></h2>
+  <form class="inline" method="get" onsubmit="location.href='/sku/'+this.sku.value+'{{ '?run=' ~ run.run_id if run and run_param else '' }}';return false">
+    <select name="sku" aria-label="SKU">{% for s in all_skus %}<option value="{{ s.sku_id }}" {{ 'selected' if s.sku_id == sku.sku_id }}>{{ s.sku_id }} · {{ s.sku_name|short }}</option>{% endfor %}</select>
+    <button class="btn ghost sm" type="submit">Show</button>
+  </form>
+</div>
+<div class="grid g2">
   <div class="card">
-    <b>Weekly units sold</b> <span class="small">{% if weeks %}{{ weeks[0].iso_week }}–{{ weeks[-1].iso_week }}, export {{ run.export_id }}{% endif %}</span>
+    <h3>Weekly units sold</h3><span class="small">{% if weeks %}{{ weeks[0].iso_week }} to {{ weeks[-1].iso_week }} · export {{ run.export_id }}{% endif %}</span>
     {{ m.chart(weeks, l.avg12 if l else none, last4, window, threshold_pct) }}
   </div>
   <div class="card">
     {% if l %}
-    <div>{{ m.flags(l) }} {{ m.status(l) }}</div>
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><div>{{ m.flags(l) }}</div><div>{{ m.status(l) }}</div></div>
+    <div style="margin:12px 0 4px" class="small">Weeks of cover against the {{ l.min_weeks|wk }}–{{ l.max_weeks|wk }} w window</div>
+    {{ m.cover_bar(l, 16) }}
     <table style="margin-top:8px">
-      <tr><td>Category · perishability</td><td>{{ sku.category }} · {{ sku.perishability }}</td></tr>
-      <tr><td>Linked distributor</td><td>{{ sku.distributor_name }}</td></tr>
-      <tr><td>Standard reorder qty</td><td>{{ sku.standard_reorder_qty }} {{ sku.unit_of_measure|lower }}</td></tr>
-      <tr><td>Last 4w avg · 12w avg</td><td>{{ l.last4_avg|fmt1 }} · {{ l.avg12|fmt1 }} ({{ l.change_pct|pct }})</td></tr>
-      <tr><td>Weekly demand used</td><td>{{ l.demand_weekly|fmt1 }}{% if l.uplift > 1 %} (incl. +{{ ((l.uplift - 1) * 100)|round|int }}% festival){% endif %}</td></tr>
-      <tr><td>On hand · open POs</td><td>{{ l.on_hand|num }} · {% if l.open_po_qty is none %}unknown{% else %}{{ l.open_po_qty|num }}{% endif %}</td></tr>
-      <tr><td>Weeks of cover</td><td><b>{{ l.cover_weeks|fmtw }} w</b> against a {{ l.min_weeks|wk }}–{{ l.max_weeks|wk }} w window</td></tr>
-      <tr><td>Recommendation</td><td>{{ m.action(l) }}{% if l.cover_after is not none %} → {{ l.cover_after|fmtw }} w{% endif %}</td></tr>
+      <tr><td class="small">Last 4 weeks · 12-week avg</td><td>{{ l.last4_avg|fmt1 }} · {{ l.avg12|fmt1 }} per week ({{ l.change_pct|pct }})</td></tr>
+      <tr><td class="small">Weekly demand used</td><td>{{ l.demand_weekly|fmt1 }}{% if l.uplift > 1 %} <span class="mut">incl. +{{ ((l.uplift - 1) * 100)|round|int }}% festival</span>{% endif %}</td></tr>
+      <tr><td class="small">On hand · open POs</td><td>{{ l.on_hand|num }} · {% if l.open_po_qty is none %}<span class="mut">unknown</span>{% else %}{{ l.open_po_qty|num }}{% endif %}</td></tr>
+      <tr><td class="small">Weeks of cover</td><td><b>{{ l.cover_weeks|fmtw }} w</b>{% if l.cover_after is not none %} → {{ l.cover_after|fmtw }} w after reorder{% endif %}</td></tr>
+      <tr><td class="small">Recommendation</td><td>{{ m.action(l) }}</td></tr>
+      <tr><td class="small">Standard reorder qty</td><td>{{ sku.standard_reorder_qty }} {{ sku.unit_of_measure|lower }}</td></tr>
     </table>
-    <div class="ai"><b>{{ 'Claude' if l.reason_source == 'claude' else 'Rules engine' }}:</b> {{ l.reason }}{% if l.why_unusual %}<br><b>Why unusual:</b> {{ l.why_unusual }}{% endif %}</div>
-    {% else %}<p class="mut">This SKU isn't in run {{ run.run_id }}.</p>{% endif %}
+    <div class="ai"><b>{{ 'Claude' if l.reason_source == 'claude' else 'Rules engine' }}:</b> {{ l.reason }}{% if l.why_unusual %}<br><b>What looks unusual:</b> {{ l.why_unusual }}{% endif %}</div>
+    {% if l.line_status in ('awaiting_gate1', 'awaiting_gate2') %}<a class="btn" href="/decisions?run={{ run.run_id }}">Decide on Decisions →</a>{% endif %}
+    {% else %}<p class="mut">This SKU isn't in {{ 'run ' ~ run.run_id if run else 'any run yet' }}.</p>{% endif %}
   </div>
 </div>
-<div class="sec">History · every run for this SKU</div>
-<div class="card scroll"><table>
-  <tr><th>Run</th><th>When</th><th>Cover</th><th>Flag</th><th>Recommended</th><th>Gate 1</th><th>Gate 2</th><th>Status</th></tr>
+<div class="sec"><h2>History <small>every run for this SKU</small></h2></div>
+<div class="card scroll" style="padding:6px 10px"><table>
+  <tr><th>Run</th><th>When</th><th class="n">Cover</th><th>Flag</th><th>Recommendation</th><th>Your decision</th><th>Status</th></tr>
   {% for h in history %}
-  <tr><td>{{ h.run_id }}{{ ' · shadow' if h.shadow_mode }}</td><td>{{ h.run_as_of|ist }}</td><td class="n">{{ h.cover_weeks|fmtw }} w</td><td>{{ m.flags(h) }}</td><td>{{ m.action(h) }}</td>
-      <td class="small">{% if h.gate1_decision %}{{ h.gate1_decision }}{% if h.gate1_reason %} · “{{ h.gate1_reason }}”{% endif %}{% else %}—{% endif %}</td>
-      <td class="small">{% if h.gate2_decision %}{{ h.gate2_decision }} {{ h.gate2_qty if h.gate2_qty is not none else '' }}{% if h.gate2_reason %} · “{{ h.gate2_reason }}”{% endif %}{% else %}—{% endif %}</td>
+  <tr><td>{{ h.run_id }}{% if h.shadow_mode %} <span class="mut">shadow</span>{% endif %}</td><td class="small">{{ h.run_as_of|ist }}</td><td class="n">{{ h.cover_weeks|fmtw }} w</td><td>{{ m.flags(h) }}</td><td>{{ m.action(h) }}</td>
+      <td class="small">{% if h.gate1_decision %}Exception: {{ h.gate1_decision }}{% if h.gate1_reason %} · “{{ h.gate1_reason }}”{% endif %}<br>{% endif %}{% if h.gate2_decision %}{{ h.gate2_decision }}{% if h.gate2_qty is not none and h.action != 'pause' %} {{ h.gate2_qty }}{% endif %}{% if h.gate2_reason %} · “{{ h.gate2_reason }}”{% endif %}{% endif %}{% if not (h.gate1_decision or h.gate2_decision) %}—{% endif %}</td>
       <td>{{ m.status(h) }}</td></tr>
-  {% else %}<tr><td colspan="8" class="mut">No runs yet.</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="7" class="mut">No runs yet.</td></tr>{% endfor %}
 </table></div>
 {% endblock %}

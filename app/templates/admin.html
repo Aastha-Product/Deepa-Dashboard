@@ -1,30 +1,32 @@
 {% extends "base.html" %}
-{% block title %}Exports &amp; runs{% endblock %}
+{% block title %}Data &amp; runs{% endblock %}
 {% block body %}
-<div class="grid2">
+<div class="grid g2" style="margin-top:18px">
 <div class="card">
-  <b>Upload an SAP export</b>
-  <p class="small">Normally IT's scheduled export puts these two files in the <code>sap-exports</code> bucket. Use this for a manual or demo run. Files: <code>sales_weekly.csv</code> (SKU_ID, Week, Units_Sold) and <code>inventory_snapshot.csv</code> (SKU_ID, Location, Units_On_Hand, As_Of_Date).</p>
-  <form method="post" action="/admin/upload" enctype="multipart/form-data">
-    <p><label>sales_weekly.csv <input type="file" name="sales" accept=".csv" required></label></p>
-    <p><label>inventory_snapshot.csv <input type="file" name="inventory" accept=".csv" required></label></p>
-    <button class="btn" type="submit">Upload export</button>
+  <h3>Upload an SAP export</h3>
+  <p class="small">Normally IT's scheduled export puts these files in the <code>sap-exports</code> bucket before each run. Use this for a manual or demo run.</p>
+  <form method="post" action="/admin/upload" enctype="multipart/form-data" style="display:grid;gap:8px">
+    <label class="small">sales_weekly.csv <span class="mut">(SKU_ID, Week, Units_Sold)</span><br><input type="file" name="sales" accept=".csv" required></label>
+    <label class="small">inventory_snapshot.csv <span class="mut">(SKU_ID, Location, Units_On_Hand, As_Of_Date)</span><br><input type="file" name="inventory" accept=".csv" required></label>
+    <div><button class="btn" type="submit">Upload export</button></div>
   </form>
 </div>
 <div class="card">
-  <b>Run now</b>
-  <p class="small">Runs the rules on the newest export in the bucket, exactly like the Mon + Thu 06:00 run. A stale export (over 48 h) stops the run and alerts IT.</p>
+  <h3>Run now</h3>
+  <p class="small">Runs the rules on the newest export, exactly like the Mon + Thu 06:00 run. An export over 48 h old stops the run and alerts IT.</p>
   <form method="post" action="/admin/run" class="inline">
-    <input type="text" name="replay_as_of" placeholder="Replay as of (demo), e.g. 2026-10-19T06:00" aria-label="Replay time" style="min-width:300px">
+    <input type="text" name="replay_as_of" placeholder="Replay as of (demo), e.g. 2026-10-19T06:00" aria-label="Replay time" style="min-width:290px">
     <button class="btn" type="submit">Run now</button></form>
-  <p class="small">Leave the replay time empty for a real run. Fill it only to replay a past export, such as the Case 01 seed (stock as of 19 Oct 2026); otherwise the 48-hour rule correctly stops an old export.</p>
+  <p class="small">Leave the replay time empty for a real run. Fill it only to replay a past export, such as the Case 01 seed (stock as of 19 Oct 2026).</p>
 </div>
 </div>
-<div class="sec">Recent runs</div>
-<div class="card scroll"><table>
-  <tr><th>Run</th><th>Run clock</th><th>Started by</th><th>Export</th><th>Data age</th><th>Status</th><th>Detail</th></tr>
-  {% for r in recent %}<tr><td>{{ r.run_id }}</td><td>{{ r.run_as_of|ist }}</td><td>{{ r.triggered_by }}</td><td>{{ r.export_id or '—' }}</td>
-    <td class="n">{{ r.data_age_hours|fmt1 }} h</td><td><b>{{ r.status|replace('_', ' ') }}</b>{{ ' · shadow' if r.shadow_mode }}</td><td class="small">{{ r.status_detail or '' }}</td></tr>
+<div class="sec"><h2>Recent runs</h2></div>
+<div class="card scroll" style="padding:6px 10px"><table>
+  <tr><th>Run</th><th>Run clock</th><th>Started by</th><th>Export</th><th class="n">Data age</th><th>Status</th><th>Detail</th></tr>
+  {% for r in recent %}<tr><td>{{ r.run_id }}</td><td class="small">{{ r.run_as_of|ist }}</td><td class="small">{{ r.triggered_by }}</td><td class="small">{{ r.export_id or '—' }}</td>
+    <td class="n">{{ r.data_age_hours|fmt1 }} h</td>
+    <td>{% if r.status == 'ok' %}<span class="chip done">ok</span>{% else %}<span class="chip stop">{{ r.status|replace('_', ' ') }}</span>{% endif %}{% if r.shadow_mode %} <span class="mut">shadow</span>{% endif %}</td>
+    <td class="small">{{ r.status_detail or '' }}</td></tr>
   {% else %}<tr><td colspan="7" class="mut">No runs yet.</td></tr>{% endfor %}
 </table></div>
 {% endblock %}

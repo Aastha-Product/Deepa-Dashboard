@@ -88,7 +88,7 @@ def evaluate(s: SkuInput, run_date: date, t: dict) -> Recommendation:
                          None, lo, hi)
 
     if len(weeks) < t["exceptions.new_sku_min_history_weeks"]:
-        rec.action, rec.exception_type = "review", "new_sku"    # not enough history: Raghav decides
+        rec.action, rec.exception_type = "review", "new_sku"    # not enough history: a judgment call for Deepa
         return rec
 
     window = weeks[-long_n:]
@@ -136,9 +136,9 @@ def evaluate(s: SkuInput, run_date: date, t: dict) -> Recommendation:
 def template_reason(r: Recommendation) -> str:
     """Plain reason built from the numbers only; used when the AI step is off or fails."""
     if r.exception_type == "new_sku":
-        return f"Only {r.history_weeks} weeks of sales history; needs Raghav's judgment."
+        return f"Only {r.history_weeks} weeks of sales history; needs a judgment call."
     if r.exception_type == "zero_demand":
-        return "No sales in the last 12 weeks, so weeks of cover can't be worked out; needs Raghav's judgment."
+        return "No sales in the last 12 weeks, so weeks of cover can't be worked out; needs a judgment call."
     parts = []
     if r.flag_high_demand:
         parts.append(f"Last 4 weeks {r.last4_avg:.0f}/wk are {r.change_pct:+.0f}% vs the 12-week average {r.avg12:.0f}/wk")
@@ -156,5 +156,5 @@ def template_reason(r: Recommendation) -> str:
     elif r.action == "pause":
         text += ". Pause the next order."
     if r.exception_type == "conflicting_flags":
-        text += " Conflicting flags: needs Raghav's judgment."
+        text += " Conflicting flags: needs a judgment call."
     return text[0].upper() + text[1:]

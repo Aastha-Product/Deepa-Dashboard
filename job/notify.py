@@ -1,8 +1,8 @@
 """Summary email after a good run, alert after a stopped or failed one (map step 9).
 
 Email is best-effort: if SMTP isn't configured or sending fails, the run result is unchanged and the
-dashboard still shows everything. Recipients come from MAIL_TO_SUMMARY (Raghav, Procurement, Deepa)
-and MAIL_TO_IT_ALERT (IT, plus Raghav if wanted), comma-separated.
+dashboard still shows everything. Recipients come from MAIL_TO_SUMMARY (Deepa, plus anyone else she wants informed)
+and MAIL_TO_IT_ALERT (IT), comma-separated.
 """
 import html
 import logging
@@ -40,13 +40,13 @@ def build_summary(summary) -> tuple:
     c, url = summary.counts, os.environ.get("DASHBOARD_URL", "https://deepa-dashboard.vercel.app")
     shadow = " [SHADOW MODE]" if summary.shadow_mode else ""
     subject = (f"Freshroots demand planning run {summary.run_id}{shadow}: {c.get('stockout', 0)} stockout, "
-               f"{c.get('overstock', 0)} overstock, {c.get('exceptions', 0)} for Raghav")
+               f"{c.get('overstock', 0)} overstock, {c.get('exceptions', 0)} to decide")
     lines = [
         f"Run {summary.run_id} finished.{shadow}",
         f"SKUs checked {c.get('skus', 0)} · stockout risk {c.get('stockout', 0)} · overstock risk {c.get('overstock', 0)}"
         f" · high demand {c.get('high_demand', 0)} · OK {c.get('ok', 0)}",
-        f"Exceptions for Raghav (Gate 1): {', '.join(summary.exceptions) or 'none'}",
-        "Reorder lines for procurement (Gate 2): " + (", ".join(f"{s} {q}" for s, q in summary.reorders) or "none"),
+        f"Exceptions to decide: {', '.join(summary.exceptions) or 'none'}",
+        "Reorder lines to approve: " + (", ".join(f"{s} {q}" for s, q in summary.reorders) or "none"),
         summary.detail,
         f"Dashboard: {url}",
     ]

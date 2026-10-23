@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Decisions{% endblock %}
+{% block body %}
+{% if not run %}
+  <div class="card" style="margin-top:18px"><h2>No completed run yet</h2></div>
+{% else %}
+
+<div class="sec"><h2>1 · Exceptions <small>cases the rules can't settle on their own (map step 10)</small></h2>
+  <span class="small">{{ pending.gate1 }} waiting</span></div>
+{% for l in exceptions %}
+<div class="card" style="margin-bottom:12px;{{ 'border-left:4px solid #6a4bc4' if l.line_status == 'awaiting_gate1' }}">
+  <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
+    <div><a href="/sku/{{ l.sku_id }}?run={{ run.run_id }}"><h3>{{ l.sku_id }} · {{ l.sku_name|short }}</h3></a>
+      <span class="small">{{ l.category }} · {{ l.perishability }} perishability · {{ l.distributor_name }}</span></div>
+    <div>{{ m.flags(l) }} {{ m.status(l) }}</div>
+  </div>
+  <div class="grid g2" style="margin-top:6px;gap:18px">
+    <div>
+      <ul class="trace small">
+        {% if l.exception_type == 'new_sku' %}<li>Only {{ l.history_weeks }} weeks of sales history; the rules need 12.</li>
+        {% elif l.exception_type == 'zero_demand' %}<li>No sales in the 12-week window, so weeks of cover can't be worked out.</li>
+        {% else %}
+        <li><b>Rule 1</b> · last 4 weeks {{ l.last4_avg|fmt1 }}/wk vs 12-week average {{ l.avg12|fmt1 }}/wk = <b>{{ l.change_pct|pct }}</b> (high demand above +20%){% if l.flag_high_demand %} → 1.5 &times; {{ l.standard_reorder_qty }}{% endif %}</li>
+        <li><b>Rule 4</b> · weekly demand {{ l.avg12|fmt1 }} &times; {{ l.uplift }} = <b>{{ l.demand_weekly|fmt1 }}</b></li>
+        <li><b>Rules 2, 3, 5</b> · {{ l.on_hand|num }} on hand{% if l.open_po_qty %} + {{ l.open_po_qty|num }} on order{% endif %} ÷ {{ l.demand_weekly|fmt1 }} = <b>{{ l.cover_weeks|fmtw }} w</b>, window {{ l.min_weeks|wk }}–{{ l.max_weeks|wk }} w</li>
+        {% endif %}
+      </ul>
+      <div class="ai"><b>{{ 'Claude' if l.reason_source == 'claude' else 'Rules engine' }}:</b> {{ l.reason }}{% if l.why_unusual %}<br><b>What looks unusual:</b> {{ l.why_unusual }}{% endif %}</div>
+    </div>
+    <div>
+      <div class="small">Recommendation</div>
+      <div style="font-size:16px;margin:2px 0 6px">{{ m.action(l) }}{% if l.cover_after is not none %} <span class="mut">→ {{ l.cover_after|fmtw }} w cover</span>{% endif %}</div>
+      {{ m.cover_bar(l, 16) }}
+      {% if l.line_status == 'awaiting_gate1' %}
+      <form method="post" action="/decide" style="margin-top:10px;display:grid;gap:6px">
+        <input type="hidden" name="run_id" value="{{ run.run_id }}"><input type="hidden" name="sku_id" value="{{ l.sku_id }}"><input type="hidden" name="gate" value="1">
+        <div class="inline" style="display:flex;gap:6px;flex-wrap:wrap">
+          <select name="decision" aria-label="Decision">
+            <option value="accept">Accept{% if l.qty %} {{ l.qty }}{% endif %}</option>
+            <option value="change">Change quantity</option>
+            <option value="override">Override: don't order</option></select>
+          <input type="number" name="final_qty" min="0" placeholder="New qty" aria-label="New quantity" style="width:110px">
+        </div>
+        <input type="text" name="reason" placeholder="Reason (needed to change or override)" aria-label="Reason">
+        <div><button class="btn" type="submit">Record decision</button></div>
+      </form>
+      {% elif l.gate1_decision %}
+      <p class="small" style="margin-top:10px"><b>Decided</b> {{ l.gate1_at|ist }}: {{ l.gate1_decision }}{% if l.gate1_qty is not none %}, qty {{ l.gate1_qty }}{% endif %}{% if l.gate1_reason %} · “{{ l.gate1_reason }}”{% endif %}</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card small">No exceptions in this run.</div>
+{% endfor %}
+
+<div class="sec"><h2>2 · Approve reorders and pauses <small>check the quantity, then raise the PO in Zoho by hand (map step 11)</small></h2>
+  {% if approvals %}
+  <form method="post" action="/decide/approve-all" onsubmit="return confirm('Approve all {{ approvals|length }} lines at the recommended quantity?')">
+    <input type="hidden" name="run_id" value="{{ run.run_id }}">
+    <button class="btn green" type="submit">Approve all {{ approvals|length }} as recommended</button></form>
+  {% endif %}
+</div>
+<div class="card scroll" style="padding:6px 10px">
+<table>
+  <tr><th>SKU</th><th>Action</th><th class="n">Qty</th><th>Cover now → after</th><th>Check</th><th>Decide</th></tr>
+  {% for l in approvals %}
+  <tr>
+    <td><a href="/sku/{{ l.sku_id }}?run={{ run.run_id }}"><b>{{ l.sku_id }}</b></a> <span class="small">{{ l.sku_name|short }}</span><br><span class="mut" style="font-size:12px">{{ l.distributor_name }}</span></td>
+    <td>{{ 'Pause next order' if l.action == 'pause' else 'Reorder' }}</td>
+    <td class="n"><b>{{ l.final_qty if l.action != 'pause' else '—' }}</b>{% if l.gate1_qty is not none and l.gate1_qty != l.qty %}<br><span class="mut">was {{ l.qty }}</span>{% endif %}</td>
+    <td>{{ m.cover_bar(l, 16) }}<br><span class="small">{{ l.cover_weeks|fmtw }} w{% if l.cover_after is not none %} → {{ l.cover_after|fmtw }} w{% endif %} · window {{ l.min_weeks|wk }}–{{ l.max_weeks|wk }} w</span></td>
+    <td>{% if l.qty_basis == 'topup' %}<span class="chip warn" title="Standard quantity wouldn't reach the minimum cover">topped up from {{ l.standard_reorder_qty }}</span>{% elif l.gate1_decision %}<span class="chip ex">exception: {{ l.gate1_decision }}</span>{% elif l.perishability == 'High' %}<span class="chip warn">perishable</span>{% else %}<span class="mut">—</span>{% endif %}</td>
+    <td>
+      <form method="post" action="/decide" class="inline">
+        <input type="hidden" name="run_id" value="{{ run.run_id }}"><input type="hidden" name="sku_id" value="{{ l.sku_id }}"><input type="hidden" name="gate" value="2">
+        <select name="decision" aria-label="Decision"><option value="approve">Approve</option>{% if l.action != 'pause' %}<option value="change">Change qty</option>{% endif %}</select>
+        {% if l.action != 'pause' %}<input type="number" name="final_qty" min="0" placeholder="Qty" aria-label="Quantity" style="width:80px">{% endif %}
+        <input type="text" name="reason" placeholder="Reason if changed" aria-label="Reason" style="width:170px">
+        <button class="btn sm" type="submit">Save</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}<tr><td colspan="6" class="mut">{% if pending.gate1 %}Decide the exceptions above first; their lines then appear here.{% else %}Nothing to approve in this run.{% endif %}</td></tr>{% endfor %}
+</table>
+</div>
+
+{% if decided %}
+<div class="sec"><h2>Decided this run <small>approved lines are raised in Zoho by hand; the next run marks them "PO recorded"</small></h2></div>
+<div class="card scroll" style="padding:6px 10px">
+<table>
+  <tr><th>SKU</th><th>Decision</th><th class="n">Qty</th><th>When</th><th>Reason</th><th>Status</th></tr>
+  {% for l in decided %}
+  <tr><td><b>{{ l.sku_id }}</b> <span class="small">{{ l.sku_name|short }}</span></td>
+    <td>{{ l.gate2_decision or l.gate1_decision }}</td>
+    <td class="n">{{ '—' if l.action == 'pause' else l.final_qty }}</td>
+    <td class="small">{{ (l.gate2_at or l.gate1_at)|ist }}</td>
+    <td class="small">{{ l.gate2_reason or l.gate1_reason or '' }}</td>
+    <td>{{ m.status(l) }}{% if l.po_number %} <span class="small">{{ l.po_number }}</span>{% endif %}</td></tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+{% endif %}
+{% endblock %}

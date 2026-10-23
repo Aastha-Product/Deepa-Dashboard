@@ -1,26 +1,56 @@
 {% macro flags(l) -%}
-  {%- if l.flag_high_demand %}<span class="chip hd">High demand</span>{% endif -%}
+  {%- if l.exception_type %}<span class="chip ex">{{ l.exception_type|replace('_', ' ')|capitalize }}</span>{% endif -%}
   {%- if l.flag_stockout %}<span class="chip so">Stockout risk</span>{% endif -%}
   {%- if l.flag_overstock %}<span class="chip ov">Overstock risk</span>{% endif -%}
-  {%- if l.exception_type %}<span class="chip ex">{{ l.exception_type|replace('_', ' ')|capitalize }}</span>{% endif -%}
+  {%- if l.flag_high_demand %}<span class="chip hd">High demand</span>{% endif -%}
   {%- if not (l.flag_high_demand or l.flag_stockout or l.flag_overstock or l.exception_type) %}<span class="chip ok">OK</span>{% endif -%}
 {%- endmacro %}
 
 {% macro action(l) -%}
   {%- if l.action == 'reorder' -%}
-    Reorder <b>{{ l.qty }}</b> <span class="mut">({% if l.qty_basis == '1.5x' %}1.5 &times; {{ l.standard_reorder_qty }}{% elif l.qty_basis == 'topup' %}std {{ l.standard_reorder_qty }} topped up to {{ l.min_weeks|wk }} w{% else %}std qty{% endif %})</span>
+    Reorder <b>{{ l.qty }}</b> <span class="mut">{% if l.qty_basis == '1.5x' %}1.5 &times; {{ l.standard_reorder_qty }}{% elif l.qty_basis == 'topup' %}std {{ l.standard_reorder_qty }}, topped up{% else %}standard qty{% endif %}</span>
   {%- elif l.action == 'pause' -%}Pause next order
-  {%- elif l.action == 'review' -%}Raghav to decide
+  {%- elif l.action == 'review' -%}Your judgment
   {%- else -%}<span class="mut">No action</span>{%- endif -%}
 {%- endmacro %}
 
-{% set STATUS = {'awaiting_gate1': 'Gate 1 · Raghav', 'awaiting_gate2': 'Gate 2 · Procurement', 'approved': 'Approved, awaiting PO',
-                 'po_recorded': 'PO recorded in Zoho', 'overridden': 'Overridden by Raghav', 'no_action': '—'} %}
-{% macro status(l) -%}<span class="st {{ l.line_status }}">{{ STATUS[l.line_status] }}</span>{%- endmacro %}
+{% set STATUS = {
+  'awaiting_gate1': ('ex', 'Your call: exception'),
+  'awaiting_gate2': ('wait', 'To approve'),
+  'approved': ('done', 'Approved · raise PO in Zoho'),
+  'po_recorded': ('done', 'PO recorded in Zoho'),
+  'overridden': ('stop', 'Overridden'),
+  'no_action': ('', '—')} %}
+{% macro status(l) -%}
+  {%- set s = STATUS[l.line_status] -%}
+  {%- if s[0] %}<span class="chip {{ s[0] }}">{{ s[1] }}</span>{% else %}<span class="mut">—</span>{% endif -%}
+{%- endmacro %}
+
+{#- Weeks of cover against the SKU's window: grey track, green window band, a dot for cover now,
+    a hollow dot for cover after the recommended reorder. Scale grows to fit, capped at 24 w. -#}
+{% macro cover_bar(l, scale) -%}
+{%- set W, H = 240, 26 -%}
+{%- set c = l.cover_weeks -%}
+{%- macro X(v) %}{{ ([[v, 0]|max, scale]|min) / scale * (W - 12) + 6 }}{% endmacro -%}
+{%- set colour = '#c0392b' if l.flag_stockout else ('#b06a00' if l.flag_overstock else ('#6a4bc4' if l.exception_type else '#2e8b57')) -%}
+<svg viewBox="0 0 {{ W }} {{ H }}" width="{{ W }}" height="{{ H }}" role="img"
+     aria-label="{{ l.sku_id }} cover {{ c|fmtw }} weeks, window {{ l.min_weeks|wk }} to {{ l.max_weeks|wk }} weeks">
+  <rect x="6" y="11" width="{{ W - 12 }}" height="4" rx="2" fill="#e8ecf4"/>
+  <rect x="{{ X(l.min_weeks) }}" y="8" width="{{ X(l.max_weeks)|float - X(l.min_weeks)|float }}" height="10" rx="3" fill="#d5eedd"/>
+  {%- if c is not none -%}
+    {%- if l.cover_after is not none -%}
+      <line x1="{{ X(c) }}" x2="{{ X(l.cover_after) }}" y1="13" y2="13" stroke="{{ colour }}" stroke-width="2" stroke-dasharray="3 2"/>
+      <circle cx="{{ X(l.cover_after) }}" cy="13" r="5" fill="#fff" stroke="{{ colour }}" stroke-width="2"/>
+    {%- endif -%}
+    <circle cx="{{ X(c) }}" cy="13" r="5.5" fill="{{ colour }}"/>
+    {%- if c > scale %}<path d="M{{ W - 6 }} 13 l-6 -5 v10 z" fill="{{ colour }}"/>{% endif -%}
+  {%- endif -%}
+</svg>
+{%- endmacro %}
 
 {% macro chart(weeks, avg12, last4_weeks, window_weeks, threshold_pct) -%}
 {%- if weeks -%}
-{%- set W, H, P = 640, 230, 36 -%}
+{%- set W, H, P = 640, 240, 36 -%}
 {%- set vals = weeks|map(attribute='units_sold')|list -%}
 {%- set hi = [vals|max, (avg12 or 0) * (1 + threshold_pct / 100)]|max * 1.12 -%}
 {%- set lo = [vals|min * 0.85, 0]|max -%}
@@ -31,12 +61,12 @@
   {%- set names = weeks|map(attribute='iso_week')|list -%}
   {%- if window_weeks and window_weeks[0] in names -%}
     {%- set a = names.index(window_weeks[0]) -%}
-    <rect x="{{ X(a) }}" y="{{ P - 8 }}" width="{{ X(n - 1)|float - X(a)|float }}" height="{{ H - 2 * P + 8 }}" fill="#eef3fb"/>
+    <rect x="{{ X(a) }}" y="{{ P - 8 }}" width="{{ X(n - 1)|float - X(a)|float }}" height="{{ H - 2 * P + 8 }}" fill="#eef3fb" rx="4"/>
     <text x="{{ X(a)|float + 6 }}" y="{{ P + 4 }}" font-size="11" fill="#5a6b8c">12-week window</text>
   {%- endif -%}
   {%- if last4_weeks and last4_weeks[0] in names -%}
     {%- set b = names.index(last4_weeks[0]) -%}
-    <rect x="{{ X(b) }}" y="{{ P + 12 }}" width="{{ X(n - 1)|float - X(b)|float }}" height="{{ H - 2 * P - 12 }}" fill="#fdf0d8"/>
+    <rect x="{{ X(b) }}" y="{{ P + 12 }}" width="{{ X(n - 1)|float - X(b)|float }}" height="{{ H - 2 * P - 12 }}" fill="#fff1d6" rx="4"/>
     <text x="{{ X(b)|float + 4 }}" y="{{ P + 25 }}" font-size="11" fill="#9a6a10">last 4 weeks</text>
   {%- endif -%}
   {%- if avg12 -%}
@@ -48,9 +78,9 @@
   {%- endif -%}
   <polyline fill="none" stroke="#2f6fd6" stroke-width="2.5" points="{% for w in weeks %}{{ X(loop.index0) }},{{ Y(w.units_sold) }} {% endfor %}"/>
   {%- for w in weeks %}<circle cx="{{ X(loop.index0) }}" cy="{{ Y(w.units_sold) }}" r="3" fill="#2f6fd6"><title>{{ w.iso_week }}: {{ w.units_sold }}</title></circle>{% endfor -%}
-  <line x1="{{ P }}" x2="{{ W - P }}" y1="{{ H - P }}" y2="{{ H - P }}" stroke="#ccd"/>
+  <line x1="{{ P }}" x2="{{ W - P }}" y1="{{ H - P }}" y2="{{ H - P }}" stroke="#d3d9e6"/>
   <text x="{{ P }}" y="{{ H - 12 }}" font-size="11" fill="#667">{{ names[0] }}</text>
-  <text x="{{ W - P - 52 }}" y="{{ H - 12 }}" font-size="11" fill="#667">{{ names[-1] }}</text>
+  <text x="{{ W - P }}" y="{{ H - 12 }}" font-size="11" fill="#667" text-anchor="end">{{ names[-1] }}</text>
 </svg>
 {%- else -%}<p class="mut">No weekly sales in this export.</p>{%- endif -%}
 {%- endmacro %}
