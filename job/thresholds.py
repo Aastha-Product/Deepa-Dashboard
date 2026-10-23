@@ -195,8 +195,11 @@ def signer_name(sign_off_by: str) -> str:
     return sign_off_by.split(",")[0].strip()
 
 
-def sign(conn, version_id: int, by: str) -> None:
-    """Record the one-time sign-off. Only the signer named in the file may sign. Caller commits."""
+def sign(conn, version_id: int, by: str, actor: str = None) -> None:
+    """Record the one-time sign-off. Only the signer named in the file may sign. Caller commits.
+
+    `actor` is the dashboard login that clicked Sign off; it's stored next to the signer's name.
+    """
     row = conn.execute("SELECT sign_off_by, signed_off_by FROM threshold_versions WHERE version_id = %s",
                        (version_id,)).fetchone()
     if not row:
@@ -206,8 +209,9 @@ def sign(conn, version_id: int, by: str) -> None:
         raise ThresholdsError(f"version {version_id} is already signed off by {already}")
     if by.strip().casefold() != signer_name(required).casefold():
         raise ThresholdsError(f"version {version_id} must be signed off by {signer_name(required)}")
+    signed = signer_name(required) + (f" ({actor})" if actor else "")
     conn.execute("UPDATE threshold_versions SET signed_off_by = %s, signed_off_at = now() WHERE version_id = %s",
-                 (signer_name(required), version_id))
+                 (signed, version_id))
 
 
 def require_signed(conn, ts: ThresholdSet = None) -> tuple:

@@ -83,6 +83,9 @@ def app_client(monkeypatch):
         "stats": {"all_decisions": 4, "accepted": 3, "overridden": 1, "live_decisions": 0, "shadow_decisions": 4},
         "totals": {"stockout_incidents": 0, "units_written_off": 12},
         "counts": {"ok_runs": 1, "shadow_runs": 1, "stopped_runs": 0}, "most_overridden": [], "outcomes": []})
+    monkeypatch.setattr(queries, "threshold_version", lambda conn, h: None)
+    monkeypatch.setattr(main.thresholds, "load", lambda conn, ts: (3, True))
+    monkeypatch.setattr(main.thresholds, "sign", lambda conn, v, by, actor=None: recorded.append(("sign", v, by, actor)))
     monkeypatch.setattr(queries, "record_decision", lambda conn, **kw: recorded.append(("decision", kw)))
     monkeypatch.setattr(queries, "log_write_off", lambda conn, **kw: recorded.append(("write_off", kw)))
     c = TestClient(main.app, follow_redirects=False)
@@ -193,6 +196,25 @@ def test_write_off_validation(app_client, monkeypatch):
     assert "kind=err" in r.headers["location"]
     r = app_client.post("/outcomes", data={"sku_id": "SKU007", "iso_week": "2026-W43", "units": 5})
     assert "kind=ok" in r.headers["location"] and app_client.recorded[0][0] == "write_off"
+
+
+def test_sign_off_only_for_deepa(app_client, monkeypatch):
+    as_user(monkeypatch, "raghav")
+    html = app_client.get("/impact").text
+    assert "Not signed off" in html and "Runs stop until Deepa Nair signs it off" in html and "Sign off these rules" not in html
+    h = main.thresholds.read().content_hash
+    assert app_client.post("/thresholds/sign", data={"content_hash": h}).status_code == 403
+    as_user(monkeypatch, "deepa")
+    assert "Sign off these rules as Deepa Nair" in app_client.get("/impact").text
+    r = app_client.post("/thresholds/sign", data={"content_hash": h})
+    assert "kind=ok" in r.headers["location"]
+    assert app_client.recorded[0] == ("sign", 3, "Deepa Nair", "deepa@example.com")
+
+
+def test_sign_off_refuses_stale_page(app_client, monkeypatch):
+    as_user(monkeypatch, "deepa")
+    r = app_client.post("/thresholds/sign", data={"content_hash": "old"})
+    assert "kind=err" in r.headers["location"] and app_client.recorded == []
 
 
 def test_admin_only_for_raghav_and_it(app_client, monkeypatch):

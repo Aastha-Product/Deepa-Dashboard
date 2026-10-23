@@ -109,6 +109,11 @@ def impact(conn):
             "outcomes": outcomes}
 
 
+def threshold_version(conn, content_hash):
+    return _one(conn, "SELECT version_id, loaded_at, signed_off_by, signed_off_at FROM threshold_versions "
+                      "WHERE content_hash = %s", (content_hash,))
+
+
 def record_decision(conn, *, run_id, sku_id, gate, decided_by, decision, final_qty, reason, shadow):
     """Caller commits. The database enforces gate/decision pairs and the required reason."""
     conn.execute("""INSERT INTO decisions (run_id, sku_id, gate, decided_by, decision, final_qty, reason, shadow)

@@ -210,9 +210,30 @@ def _all_skus(conn):
 @app.get("/impact", response_class=HTMLResponse)
 def impact(request: Request):
     user = auth.current_user(request)
+    ts = thresholds.read()
     with db.connect() as conn:
         return _page(request, "impact.html", conn, user, "impact", queries.run(conn), impact=queries.impact(conn),
-                     all_skus=_all_skus(conn), can_log=user.role in auth.CAN_LOG_OUTCOME)
+                     all_skus=_all_skus(conn), can_log=user.role in auth.CAN_LOG_OUTCOME,
+                     ts=ts, version=queries.threshold_version(conn, ts.content_hash),
+                     signer=thresholds.signer_name(ts.sign_off_by), can_sign=user.role in auth.CAN_SIGN)
+
+
+@app.post("/thresholds/sign")
+def sign_thresholds(request: Request, content_hash: str = Form(...)):
+    """Map step 0: Deepa signs off the rules file and thresholds shown on the page."""
+    user = auth.current_user(request)
+    auth.require(user, auth.CAN_SIGN)
+    ts = thresholds.read()
+    if content_hash != ts.content_hash:
+        return _back("/impact", "The rules changed while the page was open. Review them again before signing.", "err")
+    with db.connect() as conn:
+        version_id, _ = thresholds.load(conn, ts)
+        try:
+            thresholds.sign(conn, version_id, thresholds.signer_name(ts.sign_off_by), actor=user.email)
+        except thresholds.ThresholdsError as exc:
+            return _back("/impact", str(exc), "err")
+        conn.commit()
+    return _back("/impact", f"Thresholds version {version_id} signed off. The next run will use it.")
 
 
 @app.get("/admin", response_class=HTMLResponse)

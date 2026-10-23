@@ -2,6 +2,29 @@
 {% block title %}Impact &amp; rule review{% endblock %}
 {% block body %}
 {% set s = impact.stats %}{% set o = impact.totals %}{% set c = impact.counts %}
+<div class="sec">Rules sign-off · map step 0</div>
+<div class="card">
+  {% if version and version.signed_off_by %}
+    <span class="chip ok">Signed off</span> Thresholds version <b>{{ version.version_id }}</b> was signed off by {{ version.signed_off_by }} on {{ version.signed_off_at|ist }}. Runs use it.
+  {% else %}
+    <span class="chip so">Not signed off</span> {% if version %}Version <b>{{ version.version_id }}</b> is loaded but{% else %}The current rules file{% endif %} isn't signed off yet. <b>Runs stop until {{ signer }} signs it off.</b>
+  {% endif %}
+  <details style="margin-top:8px"><summary class="small">Show the rules and numbers being signed off</summary>
+    <table class="small" style="margin-top:6px">
+      <tr><td>High demand</td><td>last {{ ts.values['rules.high_demand.short_window_weeks'] }} weeks more than {{ ts.values['rules.high_demand.threshold_pct'] }}% above the {{ ts.values['rules.high_demand.long_window_weeks'] }}-week average → reorder {{ ts.values['rules.high_demand.reorder_multiplier'] }} &times; standard</td></tr>
+      <tr><td>Stockout / overstock</td><td>below {{ ts.values['rules.cover_windows.standard.min_weeks'] }} / above {{ ts.values['rules.cover_windows.standard.max_weeks'] }} weeks of cover (high perishability {{ ts.values['rules.cover_windows.high_perishability.min_weeks'] }}–{{ ts.values['rules.cover_windows.high_perishability.max_weeks'] }})</td></tr>
+      <tr><td>Festival months</td><td>{{ ts.values['rules.festival.months']|join(', ') }} (month numbers): +{{ ts.values['rules.festival.uplift_pct'] }}% before any threshold check</td></tr>
+      <tr><td>Added rule A</td><td>stockout qty topped up to the minimum cover, never above the maximum (pending Raghav's sign-off)</td></tr>
+      <tr><td>Added rules B–C</td><td>exceptions to Raghav; stop if data is over {{ ts.values['data_checks.stale_after_hours'] }} h old</td></tr>
+      <tr><td>Written by</td><td>{{ ts.written_by }} · content hash {{ ts.content_hash[:12] }}</td></tr>
+    </table>
+  </details>
+  {% if can_sign and not (version and version.signed_off_by) %}
+  <form method="post" action="/thresholds/sign" style="margin-top:10px"><input type="hidden" name="content_hash" value="{{ ts.content_hash }}">
+    <button class="btn" type="submit">Sign off these rules as {{ signer }}</button></form>
+  {% endif %}
+</div>
+
 <div class="sec">Impact &amp; rule review · Deepa · quarterly rule review</div>
 <div class="tiles">
   <div class="tile"><div class="n">{{ s.accepted|rate(s.all_decisions) }}</div><div class="l">Acceptance rate · {{ s.all_decisions }} decisions</div></div>

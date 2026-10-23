@@ -32,14 +32,28 @@ PASSWORD_PLACEHOLDER = "REPLACE_WITH_DB_PASSWORD"
 
 
 def database_configured() -> bool:
-    url = os.environ.get("DATABASE_URL", "")
+    url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL") or ""
     return bool(url) and PASSWORD_PLACEHOLDER not in url
 
 
+# libpq rejects query parameters it doesn't know (Supabase's Vercel integration adds e.g. supa=...).
+_LIBPQ_PARAMS = {"sslmode", "sslrootcert", "connect_timeout", "application_name", "options", "target_session_attrs"}
+
+
+def _clean(url: str) -> str:
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+    parts = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query) if k in _LIBPQ_PARAMS]
+    if not any(k == "sslmode" for k, _ in query):
+        query.append(("sslmode", "require"))
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
 def database_url() -> str:
-    url = os.environ.get("DATABASE_URL")
+    # DATABASE_URL locally; POSTGRES_URL (pooler) when set by Supabase's Vercel integration.
+    url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
     if not url:
         raise RuntimeError("DATABASE_URL is not set; add the Supabase pooler connection string to .env")
     if PASSWORD_PLACEHOLDER in url:
         raise RuntimeError(f"DATABASE_URL still contains {PASSWORD_PLACEHOLDER}; put the Supabase database password in .env")
-    return url
+    return _clean(url)

@@ -21,6 +21,7 @@ CAN_GATE1 = {"raghav"}
 CAN_GATE2 = {"procurement"}
 CAN_RUN = {"raghav", "it"}
 CAN_LOG_OUTCOME = {"raghav", "procurement"}
+CAN_SIGN = {"deepa"}
 
 
 @dataclass

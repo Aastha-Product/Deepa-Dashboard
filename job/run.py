@@ -72,7 +72,10 @@ def execute(conn, *, triggered_by: str, run_as_of: datetime = None, local_folder
 
     try:
         try:
-            version_id, t = thresholds.require_signed(conn)
+            current = thresholds.read()
+            thresholds.load(conn, current)      # store the current files as a version (unsigned if new)
+            conn.commit()
+            version_id, t = thresholds.require_signed(conn, current)
         except thresholds.ThresholdsError as exc:
             _finish(conn, run_id, "stopped_unsigned", str(exc))
             summary.status, summary.detail = "stopped_unsigned", str(exc)
