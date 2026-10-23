@@ -13,16 +13,20 @@ button{width:100%;border:0;background:#2f6fd6;color:#fff;border-radius:6px;paddi
   <h1>Freshroots · Demand Planning</h1>
   <p>Sign in with your work email. We'll email you a sign-in link.</p>
   {% if message %}<div class="msg {{ kind }}">{{ message }}</div>{% endif %}
-  {% if script %}<script>
-    // The sign-in link returns the session in the URL fragment, which the server never sees; send it once, then clear it.
+  <div id="signing" class="msg ok" hidden>Signing you in…</div>
+  <form id="form" method="post" action="/login"><input type="email" name="email" placeholder="you@freshroots.in" required autofocus aria-label="Email"><button type="submit">Email me a sign-in link</button></form>
+  <script>
+    // Sign-in and invite links return the session in the URL fragment, which the server never sees.
+    // Supabase may land on /, /login or /auth/callback (the fragment survives the redirect), so check here.
     const p = new URLSearchParams(location.hash.slice(1));
+    const fail = msg => { history.replaceState(null, '', '/login'); location.replace('/login?error=' + encodeURIComponent(msg)); };
     if (p.get('access_token')) {
+      document.getElementById('form').hidden = true; document.getElementById('signing').hidden = false;
       fetch('/auth/session', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({access_token: p.get('access_token')})})
-        .then(r => r.ok ? location.replace('/') : r.json().then(j => { history.replaceState(null, '', '/login'); document.body.innerHTML = '<div class="box"><div class="msg err">' + (j.detail || 'Sign-in failed') + '</div><a href="/login">Try again</a></div>'; }));
+        .then(r => r.ok ? location.replace('/') : r.json().then(j => fail(j.detail || 'Sign-in failed')))
+        .catch(() => fail('Sign-in failed'));
     } else if (p.get('error_description')) {
-      location.replace('/login?error=' + encodeURIComponent(p.get('error_description')));
-    } else { location.replace('/login'); }
-  </script>{% else %}
-  <form method="post" action="/login"><input type="email" name="email" placeholder="you@freshroots.in" required autofocus aria-label="Email"><button type="submit">Email me a sign-in link</button></form>
-  {% endif %}
+      fail(p.get('error_description'));
+    } else if ({{ 'true' if script else 'false' }}) { location.replace('/login'); }
+  </script>
 </div></body></html>
