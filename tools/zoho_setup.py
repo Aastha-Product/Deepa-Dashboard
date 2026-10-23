@@ -10,7 +10,10 @@ Before running:
 Then, from the project folder:
     .venv\\Scripts\\python tools\\zoho_setup.py
 
-Secrets are typed into hidden prompts and never printed. The script writes:
+Or paste the values into zoho_codes.txt (git-ignored: CLIENT_ID=, CLIENT_SECRET=, CODE=, optional
+ORGANIZATION_ID=) and add --from-file zoho_codes.txt; the file is deleted once setup succeeds.
+
+Secrets are typed into hidden prompts (or read from that file) and never printed. The script writes:
   - the four ZOHO_ values into .env (for local runs), and
   - zoho.vercel.env, for Vercel -> deepa-dashboard -> Settings -> Environment Variables -> Import .env.
     Delete that file after importing it. It's git-ignored.
@@ -44,11 +47,33 @@ def set_env(path: Path, values: dict) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def main() -> int:
-    print("Zoho Inventory setup (read-only, India data centre). Input is hidden; paste and press Enter.\n")
-    client_id = ask("Client ID: ")
-    client_secret = ask("Client Secret: ")
-    code = ask("Generated code (expires in 10 minutes): ")
+FILE_KEYS = ("CLIENT_ID", "CLIENT_SECRET", "CODE", "ORGANIZATION_ID")
+
+
+def read_codes(path: Path) -> dict:
+    """KEY=value lines from the Notepad file; blank values and # comments are ignored."""
+    if not path.exists():
+        sys.exit(f"{path} not found. Nothing was changed.")
+    given = {}
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip().upper() in FILE_KEYS and value.strip() and not line.lstrip().startswith("#"):
+            given[key.strip().upper()] = value.strip()
+    missing = [k for k in FILE_KEYS[:3] if k not in given]
+    if missing:
+        sys.exit(f"{path.name} is missing {', '.join(missing)}. Fill it in, save it and run this again.")
+    return given
+
+
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    codes_file = Path(argv[argv.index("--from-file") + 1]).resolve() if "--from-file" in argv else None
+    given = read_codes(codes_file) if codes_file else {}
+    print("Zoho Inventory setup (read-only, India data centre)."
+          + (f" Reading {codes_file.name}; values are never printed.\n" if given else " Input is hidden; paste and press Enter.\n"))
+    client_id = given.get("CLIENT_ID") or ask("Client ID: ")
+    client_secret = given.get("CLIENT_SECRET") or ask("Client Secret: ")
+    code = given.get("CODE") or ask("Generated code (expires in 10 minutes): ")
 
     with httpx.Client(timeout=30) as c:
         r = c.post(f"{ACCOUNTS}/oauth/v2/token", data={"grant_type": "authorization_code", "code": code,
@@ -62,7 +87,13 @@ def main() -> int:
 
         r = c.get(f"{API}/inventory/v1/organizations", headers=headers)
         orgs = r.json().get("organizations", []) if r.status_code == 200 else []
-        if not orgs:
+        if given.get("ORGANIZATION_ID"):
+            org_id = given["ORGANIZATION_ID"]
+            print(f"Organisation ID from {codes_file.name}: {org_id}")
+        elif not orgs and given:
+            sys.exit("Couldn't list organisations. Add ORGANIZATION_ID= (Zoho Inventory -> Settings -> Organization "
+                     "Profile) to the file, generate a new code, and run this again.")
+        elif not orgs:
             org_id = ask("Couldn't list organisations. Organisation ID (Zoho Inventory -> Settings -> "
                          "Organization Profile): ", secret=False)
         elif len(orgs) == 1:
@@ -71,6 +102,9 @@ def main() -> int:
         else:
             for i, o in enumerate(orgs, 1):
                 print(f"  {i}. {o.get('name')} ({o['organization_id']})")
+            if given:
+                sys.exit("More than one organisation. Add ORGANIZATION_ID=<the Freshroots one above> to the file, "
+                         "generate a new code, and run this again.")
             org_id = str(orgs[int(ask('Which number is Freshroots? ', secret=False)) - 1]["organization_id"])
 
         checks = {}
@@ -93,6 +127,9 @@ def main() -> int:
               "ZOHO_ORGANIZATION_ID": org_id, "ZOHO_ACCOUNTS_URL": ACCOUNTS, "ZOHO_API_URL": API}
     set_env(ROOT / ".env", values)
     (ROOT / "zoho.vercel.env").write_text("".join(f"{k}={v}\n" for k, v in values.items()), encoding="utf-8")
+    if codes_file:
+        codes_file.unlink()
+        print(f"Deleted {codes_file.name}.")
     print("\nSaved to .env, and to zoho.vercel.env for Vercel.\n"
           "Next: Vercel -> deepa-dashboard -> Settings -> Environment Variables -> Import .env -> choose\n"
           f"{ROOT / 'zoho.vercel.env'}  -> Save, then redeploy. Delete zoho.vercel.env afterwards.")

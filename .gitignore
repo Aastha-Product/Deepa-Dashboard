@@ -6,3 +6,4 @@ __pycache__/
 .pytest_cache/
 .venv/
 *.vercel.env
+zoho_codes.txt
