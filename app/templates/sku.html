@@ -1,9 +1,10 @@
 {% extends "base.html" %}
+{% import "_macros.html" as mm %}
 {% import "_macros.html" as m %}
 {% block title %}{{ sku.sku_id }}{% endblock %}
 {% block body %}
 <div class="sec">
-  <h2>{{ sku.sku_id }} · {{ sku.sku_name|short }} <small>{{ sku.category }} · {{ sku.perishability }} perishability · {{ m.distributor(sku) }}</small></h2>
+  <h2>{% if l %}{{ mm.avatar(l) }}{% endif %}{{ sku.sku_id }} · {{ sku.sku_name|short }} <small>{{ sku.category }} · {{ sku.perishability }} perishability · {{ m.distributor(sku) }}</small></h2>
   <form class="inline" method="get" onsubmit="location.href='/sku/'+this.sku.value+'{{ '?run=' ~ run.run_id if run and run_param else '' }}';return false">
     <select name="sku" aria-label="SKU">{% for s in all_skus %}<option value="{{ s.sku_id }}" {{ 'selected' if s.sku_id == sku.sku_id }}>{{ s.sku_id }} · {{ s.sku_name|short }}</option>{% endfor %}</select>
     <button class="btn ghost sm" type="submit">Show</button>
@@ -11,7 +12,7 @@
 </div>
 <div class="grid g2">
   <div class="card">
-    <h3>Weekly units sold</h3><span class="small">{% if weeks %}{{ weeks[0].iso_week }} to {{ weeks[-1].iso_week }} · export {{ run.export_id }}{% endif %}</span>
+    <h3>{{ mm.icon('chart', 17) }}Weekly units sold</h3><span class="small">{% if weeks %}{{ weeks[0].iso_week }} to {{ weeks[-1].iso_week }} · export {{ run.export_id }}{% endif %}</span>
     {{ m.chart(weeks, l.avg12 if l else none, last4, window, threshold_pct) }}
   </div>
   <div class="card">
@@ -29,11 +30,11 @@
       <tr><td class="small">Standard reorder qty</td><td>{{ sku.standard_reorder_qty }} {{ sku.unit_of_measure|lower }}</td></tr>
     </table>
     <div class="ai"><b>{{ 'Claude' if l.reason_source == 'claude' else 'Rules engine' }}:</b> {{ l.reason }}{% if l.why_unusual %}<br><b>What looks unusual:</b> {{ l.why_unusual }}{% endif %}</div>
-    {% if l.line_status in ('awaiting_gate1', 'awaiting_gate2') %}<a class="btn" href="/decisions?run={{ run.run_id }}">Decide on Decisions →</a>{% endif %}
+    {% if l.line_status in ('awaiting_gate1', 'awaiting_gate2') %}<a class="btn mango" href="/decisions?run={{ run.run_id }}">Decide on Decisions {{ mm.icon('arrow', 16) }}</a>{% endif %}
     {% else %}<p class="mut">This SKU isn't in {{ 'run ' ~ run.run_id if run else 'any run yet' }}.</p>{% endif %}
   </div>
 </div>
-<div class="sec"><h2>History <small>every run for this SKU</small></h2></div>
+<div class="sec"><h2><span class="hi">{{ mm.icon('history', 17) }}</span>History <small>every run for this SKU</small></h2></div>
 <div class="card scroll" style="padding:6px 10px"><table>
   <tr><th>Run</th><th>When</th><th class="n">Cover</th><th>Flag</th><th>Recommendation</th><th>Your decision</th><th>Status</th></tr>
   {% for h in history %}

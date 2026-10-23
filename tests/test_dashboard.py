@@ -160,7 +160,7 @@ def test_overview_changes_since_last_run(app_client, monkeypatch):
 
 def test_decisions_page_has_both_gates(app_client):
     html = app_client.get("/decisions").text
-    assert "1 · Exceptions" in html and "2 · Approve reorders and pauses" in html
+    assert '<span class="num">1</span>Exceptions' in html and '<span class="num">2</span>Approve reorders and pauses' in html
     assert "Record decision" in html and "Accept and approve 750" in html and "+21.4%" in html
     assert html.count('name="gate" value="2"') == 6
     assert "Approve all 6 as recommended" in html and "topped up from 120" in html
@@ -313,7 +313,7 @@ def test_days_of_stock_left(app_client):
     html = app_client.get("/").text
     assert "Days of stock" in html
     # SKU011: 460 on hand / (204.3 x 1.25 / 7 per day) = 13 days; SKU002: 1,200 / (83.8 x 1.25 / 7) = 80 days
-    assert '<b style="color:#c0392b">13</b> <span class="mut">days</span>' in html
+    assert '<b style="color:var(--red)">13</b> <span class="mut">days</span>' in html
     assert '<b style="color:inherit">80</b>' in html
 
 

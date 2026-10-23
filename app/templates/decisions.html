@@ -6,13 +6,13 @@
   <div class="card" style="margin-top:18px"><h2>No completed run yet</h2></div>
 {% else %}
 
-<div class="sec"><h2>1 · Exceptions <small>cases the rules can't settle on their own; accepting or changing one also approves it (map steps 10–11)</small></h2>
-  <span class="small">{{ pending.gate1 }} waiting</span></div>
+<div class="sec"><h2><span class="num">1</span>Exceptions <small>cases the rules can't settle on their own; accepting or changing one also approves it (map steps 10–11)</small></h2>
+  <span class="chip {{ 'ex' if pending.gate1 else 'done' }}">{{ pending.gate1 }} waiting</span></div>
 {% for l in exceptions %}
-<div class="card" style="margin-bottom:12px;{{ 'border-left:4px solid #6a4bc4' if l.line_status == 'awaiting_gate1' }}">
+<div class="card {{ 'exc' if l.line_status == 'awaiting_gate1' }}" style="margin-bottom:12px">
   <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
-    <div><a href="/sku/{{ l.sku_id }}?run={{ run.run_id }}"><h3>{{ l.sku_id }} · {{ l.sku_name|short }}</h3></a>
-      <span class="small">{{ l.category }} · {{ l.perishability }} perishability · {{ m.distributor(l) }}</span></div>
+    <div class="skuname">{{ m.avatar(l) }}<div><a href="/sku/{{ l.sku_id }}?run={{ run.run_id }}"><h3>{{ l.sku_id }} · {{ l.sku_name|short }}</h3></a>
+      <span class="small">{{ l.category }} · {{ l.perishability }} perishability · {{ m.distributor(l) }}</span></div></div>
     <div>{{ m.flags(l) }} {{ m.status(l) }}</div>
   </div>
   <div class="grid g2" style="margin-top:6px;gap:18px">
@@ -55,7 +55,7 @@
 <div class="card small">No exceptions in this run.</div>
 {% endfor %}
 
-<div class="sec"><h2>2 · Approve reorders and pauses <small>check the quantity; reorders are then raised in Zoho by hand, pauses skip the next order (map step 11)</small></h2>
+<div class="sec"><h2><span class="num">2</span>Approve reorders and pauses <small>check the quantity; reorders are then raised in Zoho by hand, pauses skip the next order (map step 11)</small></h2>
   {% set bulk = approvals|rejectattr('needs_look')|list %}
   {% if bulk %}
   <form method="post" action="/decide/approve-all" onsubmit="return confirm('Approve {{ bulk|length }} line{{ 's' if bulk|length != 1 }} at the recommended quantity?{{ ' Large orders stay for you to approve one by one.' if bulk|length != approvals|length }}')">
@@ -66,14 +66,14 @@
 {% if approvals %}
 <form id="bulk" method="post" action="/decide/approve-selected"><input type="hidden" name="run_id" value="{{ run.run_id }}"></form>
 {% for key, title, ls in groups if ls %}
-<h3 class="grp" id="{{ key }}">{{ title }} <span class="badge soft">{{ ls|length }}</span></h3>
+<h3 class="grp" id="{{ key }}"><span class="hi" style="width:26px;height:26px;border-radius:8px;display:inline-grid;place-items:center;background:{{ 'var(--red-bg)' if key == 'urgent' else 'var(--teal-bg)' }};color:{{ 'var(--red)' if key == 'urgent' else 'var(--teal)' }}">{{ m.icon('alert' if key == 'urgent' else 'clock', 15) }}</span>{{ title }} <span class="badge soft">{{ ls|length }}</span></h3>
 <div class="card scroll" style="padding:6px 10px">
 <table>
   <tr><th><span class="mut" title="Ticked lines are approved together">Tick</span></th><th>SKU</th><th>Action</th><th class="n">Qty</th><th class="n">Days of stock</th><th>Cover now → after</th><th>Why</th><th>Check</th><th>Decide</th></tr>
   {% for l in ls %}
   <tr>
     <td>{% if l.needs_look %}<span class="mut" title="Approve this one on its own">—</span>{% else %}<input type="checkbox" name="sku_id" value="{{ l.sku_id }}" form="bulk" checked aria-label="Select {{ l.sku_id }}">{% endif %}</td>
-    <td><a href="/sku/{{ l.sku_id }}?run={{ run.run_id }}"><b>{{ l.sku_id }}</b></a> <span class="small">{{ l.sku_name|short }}</span><br><span class="mut" style="font-size:12px">{{ m.distributor(l) }}</span></td>
+    <td><div class="skuname">{{ m.avatar(l) }}<div><a href="/sku/{{ l.sku_id }}?run={{ run.run_id }}">{{ l.sku_name|short }}</a><br><span class="mut" style="font-size:12px">{{ l.sku_id }} · {{ m.distributor(l) }}</span></div></div></td>
     <td>{{ 'Pause next order' if l.action == 'pause' else 'Reorder' }}</td>
     <td class="n"><b>{{ l.final_qty if l.action != 'pause' else '—' }}</b>{% if l.gate1_qty is not none and l.gate1_qty != l.qty %}<br><span class="mut">was {{ l.qty }}</span>{% endif %}</td>
     <td class="n">{{ m.days(l) }}</td>
@@ -100,21 +100,21 @@
 <div class="card small">{% if pending.gate1 %}Decide the exceptions above first; their lines then appear here.{% else %}Nothing to approve in this run.{% endif %}</div>
 {% endif %}
 
-<div class="sec" id="zoho"><h2>3 · Zoho export <small>approved reorders as a CSV to raise the POs in Zoho by hand; nothing is sent to Zoho automatically</small></h2></div>
-<div class="card" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
-  <div>
+<div class="sec" id="zoho"><h2><span class="num">3</span>Zoho export <small>approved reorders as a CSV to raise the POs in Zoho by hand; nothing is sent to Zoho automatically</small></h2></div>
+<div class="card" style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center;background:linear-gradient(115deg,#fff 55%,var(--brand-50))">
+  <div style="display:flex;gap:14px;align-items:flex-start"><span class="hi" style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;flex:none;background:var(--brand-100);color:var(--brand-700)">{{ m.icon('truck', 22) }}</span><div>
     {% if export_ready %}<b>{{ export_ready|length }} approved reorder line{{ 's' if export_ready|length != 1 }}</b>, {{ export_ready|sum(attribute='final_qty')|num }} units:
       <span class="small">{{ export_ready|map(attribute='sku_id')|join(', ') }}</span>
     {% else %}<span class="small">No approved reorder lines yet. Approve lines above and they'll be ready to export.</span>{% endif %}
     <div class="small mut">{% if last_export %}Last exported {{ last_export.exported_at|ist }}: {{ last_export.lines }} line{{ 's' if last_export.lines != 1 }}, {{ last_export.units|num }} units.{% else %}Not exported yet for this run.{% endif %}
       Approved pauses aren't POs, so they aren't in the file; they skip the next order.</div>
-  </div>
-  {% if export_ready %}<a class="btn" href="/decisions/zoho.csv?run={{ run.run_id }}">Download for Zoho (CSV)</a>{% endif %}
+  </div></div>
+  {% if export_ready %}<a class="btn" href="/decisions/zoho.csv?run={{ run.run_id }}">{{ m.icon('download', 16) }}Download for Zoho (CSV)</a>{% endif %}
 </div>
 
 {% if decided %}
-<div class="sec"><h2>Decided this run <small>approved reorders are raised in Zoho by hand and the next run marks them "PO recorded"; approved pauses skip the next order</small></h2>
-  <a class="btn sm ghost" href="/decisions/log.csv">Decision log (CSV)</a></div>
+<div class="sec"><h2><span class="hi">{{ m.icon('check', 17) }}</span>Decided this run <small>approved reorders are raised in Zoho by hand and the next run marks them "PO recorded"; approved pauses skip the next order</small></h2>
+  <a class="btn sm ghost" href="/decisions/log.csv">{{ m.icon('download', 14) }}Decision log (CSV)</a></div>
 <div class="card scroll" style="padding:6px 10px">
 <table>
   <tr><th>SKU</th><th>Decision</th><th class="n">Qty</th><th>When</th><th>Reason</th><th>Status</th></tr>

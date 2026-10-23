@@ -1,10 +1,11 @@
 {% extends "base.html" %}
+{% import "_macros.html" as mm %}
 {% block title %}Impact &amp; rules{% endblock %}
 {% block body %}
 {% set s = impact.stats %}{% set o = impact.totals %}{% set c = impact.counts %}
 
-<div class="sec"><h2>Rules sign-off <small>map step 0: you sign off Raghav's rules before any run uses them</small></h2></div>
-<div class="card" style="border-left:4px solid {{ '#2e8b57' if version and version.signed_off_by else '#c0392b' }}">
+<div class="sec"><h2><span class="hi">{{ mm.icon('shield', 17) }}</span>Rules sign-off <small>map step 0: you sign off Raghav's rules before any run uses them</small></h2></div>
+<div class="card" style="border-left:4px solid {{ 'var(--brand-500)' if version and version.signed_off_by else 'var(--red)' }}">
   {% if version and version.signed_off_by %}
     <span class="chip done">Signed off</span> Rules version <b>{{ version.version_id }}</b>, signed off by {{ version.signed_off_by }} on {{ version.signed_off_at|ist }}. Runs use it.
   {% else %}
@@ -22,12 +23,12 @@
   </details>
   {% if not (version and version.signed_off_by) %}
   <form method="post" action="/thresholds/sign" style="margin-top:12px"><input type="hidden" name="content_hash" value="{{ ts.content_hash }}">
-    <button class="btn" type="submit">Sign off these rules as {{ signer }}</button></form>
+    <button class="btn" type="submit">{{ mm.icon('shield', 16) }}Sign off these rules as {{ signer }}</button></form>
   {% endif %}
 </div>
 
 {% set v = ts.values %}
-<div class="sec"><h2>Recommendation rules <small>what the engine does, in the order it does it</small></h2></div>
+<div class="sec"><h2><span class="hi">{{ mm.icon('list-check', 17) }}</span>Recommendation rules <small>what the engine does, in the order it does it</small></h2></div>
 <div class="card scroll" style="padding:6px 10px">
 <table>
   <tr><th>Rule</th><th>Logic</th><th>Source</th></tr>
@@ -42,8 +43,8 @@
 </table></div>
 
 {% set exc = lines|selectattr('exception_type')|list %}
-<div class="sec"><h2>What comes to you for a decision <small>reasons explain a number; they never change one</small></h2>
-  <a class="btn sm ghost" href="/decisions/log.csv">Decision log (CSV)</a></div>
+<div class="sec"><h2><span class="hi">{{ mm.icon('route', 17) }}</span>What comes to you for a decision <small>reasons explain a number; they never change one</small></h2>
+  <a class="btn sm ghost" href="/decisions/log.csv">{{ mm.icon('download', 14) }}Decision log (CSV)</a></div>
 <div class="card scroll" style="padding:6px 10px">
 <table>
   <tr><th>Route</th><th>What happens</th><th>Kind</th><th class="n">SKUs this run</th></tr>
@@ -56,7 +57,7 @@
 </table></div>
 <p class="small">The dashboard checks add a deliberate look before approval. They don't change the signed-off rules or any quantity.</p>
 
-<div class="sec"><h2>Owners</h2></div>
+<div class="sec"><h2><span class="hi">{{ mm.icon('users', 17) }}</span>Owners</h2></div>
 <div class="card scroll" style="padding:6px 10px">
 <table>
   <tr><th>Who</th><th>Role here</th><th>Responsible for</th></tr>
@@ -66,23 +67,23 @@
   <tr><td><b>IT</b></td><td>Data owner</td><td>The SAP export before each Mon + Thu 06:00 run; alerted when a run stops on data over {{ v['data_checks.stale_after_hours'] }} h old</td></tr>
 </table></div>
 
-<div class="sec"><h2>Impact <small>tracked in units; the SAP export has no price per SKU</small></h2></div>
+<div class="sec"><h2><span class="hi">{{ mm.icon('trend', 17) }}</span>Impact <small>tracked in units; the SAP export has no price per SKU</small></h2></div>
 <div class="tiles">
-  <div class="tile"><div class="n">{{ s.accepted|rate(s.all_decisions) }}</div><div class="l">Accepted as recommended</div><div class="s">{{ s.all_decisions }} decisions · {{ s.shadow_decisions }} in shadow mode</div></div>
-  <div class="tile"><div class="n {{ 'r' if s.all_decisions and s.overridden / s.all_decisions > 0.2 }}">{{ s.overridden|rate(s.all_decisions) }}</div><div class="l">Changed or overridden</div><div class="s">each with a reason</div></div>
-  <div class="tile"><div class="n r">{{ o.stockout_incidents }}</div><div class="l">Stockout incidents logged</div></div>
-  <div class="tile"><div class="n o">{{ o.units_written_off|num }}</div><div class="l">Units written off</div></div>
-  <div class="tile"><div class="n">{{ c.ok_runs }}</div><div class="l">Completed runs</div><div class="s">{{ c.shadow_runs }} in shadow · {{ c.stopped_runs }} stopped</div></div>
+  <div class="tile t-g"><div class="ti">{{ mm.icon('check') }}</div><div class="n">{{ s.accepted|rate(s.all_decisions) }}</div><div class="l">Accepted as recommended</div><div class="s">{{ s.all_decisions }} decisions · {{ s.shadow_decisions }} in shadow mode</div></div>
+  <div class="tile t-p"><div class="ti">{{ mm.icon('flag') }}</div><div class="n {{ 'r' if s.all_decisions and s.overridden / s.all_decisions > 0.2 }}">{{ s.overridden|rate(s.all_decisions) }}</div><div class="l">Changed or overridden</div><div class="s">each with a reason</div></div>
+  <div class="tile t-r"><div class="ti">{{ mm.icon('alert') }}</div><div class="n r">{{ o.stockout_incidents }}</div><div class="l">Stockout incidents logged</div></div>
+  <div class="tile t-o"><div class="ti">{{ mm.icon('trash') }}</div><div class="n o">{{ o.units_written_off|num }}</div><div class="l">Units written off</div></div>
+  <div class="tile t-n"><div class="ti">{{ mm.icon('pulse') }}</div><div class="n">{{ c.ok_runs }}</div><div class="l">Completed runs</div><div class="s">{{ c.shadow_runs }} in shadow · {{ c.stopped_runs }} stopped</div></div>
 </div>
 <div class="tiles" style="margin-top:12px">
-  <div class="tile"><div class="n r">₹18–22L</div><div class="l">Stockout loss per quarter</div><div class="s">case baseline</div></div>
-  <div class="tile"><div class="n o">₹10–12L</div><div class="l">Overstock write-offs per quarter</div><div class="s">case baseline</div></div>
-  <div class="tile"><div class="n b" style="font-size:20px">Monthly → Mon + Thu</div><div class="l">Forecast cycle</div><div class="s">was 2 working days a month</div></div>
+  <div class="tile t-r"><div class="ti">{{ mm.icon('rupee') }}</div><div class="n r">₹18–22L</div><div class="l">Stockout loss per quarter</div><div class="s">case baseline</div></div>
+  <div class="tile t-o"><div class="ti">{{ mm.icon('rupee') }}</div><div class="n o">₹10–12L</div><div class="l">Overstock write-offs per quarter</div><div class="s">case baseline</div></div>
+  <div class="tile t-b"><div class="ti">{{ mm.icon('calendar') }}</div><div class="n b" style="font-size:20px">Monthly → Mon + Thu</div><div class="l">Forecast cycle</div><div class="s">was 2 working days a month</div></div>
 </div>
 
 <div class="grid g2" style="margin-top:14px">
 <div class="card">
-  <h3>Kill criteria <span class="chip warn">Draft, yours to confirm</span></h3>
+  <h3>{{ mm.icon('alert', 17) }}Kill criteria <span class="chip warn">Draft, yours to confirm</span></h3>
   <ol class="small">
     <li>After shadow mode, if more than <b>20%</b> of recommendations are changed or overridden, the rules don't match Raghav's judgment: stop and rework. (Raghav estimates they cover 80–85%.) Now: <b>{{ s.overridden|rate(s.all_decisions) }}</b>.</li>
     <li>By <b>day 90</b>, if stockout and write-off units aren't below the shadow-period level, rethink the approach.</li>
@@ -91,7 +92,7 @@
   <ul class="small">{% for r in impact.most_overridden %}<li><a href="/sku/{{ r.sku_id }}">{{ r.sku_id }}</a> · {{ r.n }} change{{ 's' if r.n != 1 }}/override{{ 's' if r.n != 1 }}</li>{% else %}<li class="mut">None yet.</li>{% endfor %}</ul>
 </div>
 <div class="card">
-  <h3>Log a write-off <span class="small">(map step 13)</span></h3>
+  <h3>{{ mm.icon('trash', 17) }}Log a write-off <span class="small">(map step 13)</span></h3>
   <form method="post" action="/outcomes" class="inline" style="margin-top:8px">
     <select name="sku_id" aria-label="SKU">{% for s2 in all_skus %}<option value="{{ s2.sku_id }}">{{ s2.sku_id }} · {{ s2.sku_name|short }}</option>{% endfor %}</select>
     <input type="text" name="iso_week" placeholder="2026-W43" pattern="\d{4}-W\d{2}" required aria-label="ISO week" style="width:100px">

@@ -8,51 +8,74 @@
 {% else %}
 {% set to_decide = pending.gate1 + pending.gate2 %}
 {% set attention = t.skus - t.ok %}
+{% set step_icons = ['database', 'pulse', 'shield', 'user-check', 'download'] %}
 
 <nav class="pipe" aria-label="Run pipeline">
-  {% for s in pipeline %}<a href="{{ s.href }}" class="step"><div class="lbl"><span class="pdot {{ s.status }}"></span>{{ s.label }}</div>
-    <div class="val">{{ s.value }}</div><div class="det">{{ s.detail }}</div></a>{% endfor %}
+  {% for s in pipeline %}<a href="{{ s.href }}" class="step {{ s.status }}">
+    <span class="sn">{% if s.status == 'done' %}{{ m.icon('tick', 16) }}{% else %}{{ m.icon(step_icons[loop.index0], 16) }}{% endif %}</span>
+    <span class="body"><div class="lbl"><span class="sr">Step {{ loop.index }}: </span>{{ s.label }}</div>
+      <div class="val">{{ s.value }}</div><div class="det">{{ s.detail }}</div></span></a>{% endfor %}
 </nav>
 
-<p class="headline">Run {{ run.run_id }} · {{ run.run_as_of|day }}:
-  {{ attention }} of {{ t.skus }} SKUs need attention
-  <span class="mut">· {{ t.stockout }} at stockout risk, {{ t.overstock }} overstocked{% if t.exceptions %}, {{ t.exceptions }} exception{{ 's' if t.exceptions != 1 }}{% endif %} ·
-  {% if to_decide %}{{ to_decide }} decision{{ 's' if to_decide != 1 }} waiting{% else %}all decided{% endif %}</span></p>
-{% set seg = [('exception', '#6a4bc4', 'Exception'), ('stockout', '#c0392b', 'Stockout risk'), ('overstock', '#d08a1a', 'Overstock risk'),
-              ('high_demand', '#2f6fd6', 'High demand only'), ('ok', '#2e8b57', 'OK')] %}
-<div class="dist" role="img" aria-label="SKUs by status">
-  {% for k, colour, label in seg %}{% if groups[k] %}<span style="width:{{ 100 * groups[k] / t.skus }}%;background:{{ colour }}" title="{{ label }}: {{ groups[k] }}"></span>{% endif %}{% endfor %}
-</div>
-<div class="legend">{% for k, colour, label in seg %}{% if groups[k] %}<span><i style="background:{{ colour }}"></i>{{ label }} {{ groups[k] }}</span>{% endif %}{% endfor %}</div>
+{% set seg = [('exception', '#7449de', 'Exception'), ('stockout', '#d9443a', 'Stockout risk'), ('overstock', '#f29f05', 'Overstock risk'),
+              ('high_demand', '#2d6be0', 'High demand only'), ('ok', '#22a565', 'OK')] %}
+<section class="card hero">
+  <div>
+    <div class="eyebrow">{{ m.icon('calendar', 15) }}Run {{ run.run_id }} · {{ run.run_as_of|day }}{% if run.festival_month %} <span class="chip warn">festival month</span>{% endif %}</div>
+    <p class="headline">{{ attention }} of {{ t.skus }} SKUs need attention
+      <span class="mut">{{ t.stockout }} at stockout risk, {{ t.overstock }} overstocked{% if t.exceptions %}, {{ t.exceptions }} exception{{ 's' if t.exceptions != 1 }}{% endif %} ·
+      {% if to_decide %}{{ to_decide }} decision{{ 's' if to_decide != 1 }} waiting{% else %}all decided{% endif %}</span></p>
+    <div class="dist" role="img" aria-label="SKUs by status">
+      {% for k, colour, label in seg %}{% if groups[k] %}<span style="width:{{ 100 * groups[k] / t.skus }}%;background:{{ colour }}" title="{{ label }}: {{ groups[k] }}"></span>{% endif %}{% endfor %}
+    </div>
+    <div class="legend">{% for k, colour, label in seg %}{% if groups[k] %}<span><i style="background:{{ colour }}"></i>{{ label }} {{ groups[k] }}</span>{% endif %}{% endfor %}</div>
+  </div>
+  <div class="ring-box">
+    {% set pct = (decided / decision_total) if decision_total else 1 %}
+    <div class="ring" role="img" aria-label="{{ decided }} of {{ decision_total }} decided">
+      <svg width="118" height="118" viewBox="0 0 118 118"><circle cx="59" cy="59" r="50" fill="none" stroke="#e3ece2" stroke-width="12"/>
+        {% if pct > 0 %}<circle cx="59" cy="59" r="50" fill="none" stroke="url(#rg)" stroke-width="12" stroke-linecap="round" stroke-dasharray="{{ 314.16 * pct }} 314.16"/>{% endif %}
+        <defs><linearGradient id="rg" x1="0" x2="1"><stop offset="0" stop-color="#22a565"/><stop offset="1" stop-color="#7fd9a4"/></linearGradient></defs></svg>
+      <div class="rv"><b>{{ decided }}/{{ decision_total }}</b><span>decided</span></div>
+    </div>
+    <div style="max-width:220px">
+      <div class="small" style="font-weight:600;color:var(--ink)">{% if to_decide %}{{ to_decide }} waiting for you{% else %}Nothing waiting{% endif %}</div>
+      <div class="small mut" style="margin:2px 0 10px">{{ pending.gate1 }} exception{{ 's' if pending.gate1 != 1 }} · {{ pending.gate2 }} to approve</div>
+      {% if to_decide %}<a class="btn mango" href="/decisions">Review {{ to_decide }} decision{{ 's' if to_decide != 1 }} {{ m.icon('arrow', 16) }}</a>
+      {% else %}<a class="btn ghost" href="/decisions">See the decisions {{ m.icon('arrow', 16) }}</a>{% endif %}
+    </div>
+  </div>
+</section>
 
 {% if briefing %}
-<div class="card" style="margin-top:16px">
-  <div class="sec" style="margin:0 0 6px"><h2>Look at these first</h2>
-    <span class="small mut">from this run's numbers, worked out by the rules, not AI · you decide</span></div>
+<section class="card brief-card" style="margin-top:16px">
+  <div class="sec" style="margin:0 0 6px"><h2><span class="hi">{{ m.icon('sparkle', 17) }}</span>Look at these first</h2>
+    <span class="src">{{ m.icon('shield', 14) }}from this run's numbers, worked out by the rules, not AI · you decide</span></div>
   <p class="bsum">{{ summary }}</p>
+  {% set bicons = {'so': 'alert', 'hd': 'trend', 'ov': 'pause', 'ex': 'flag'} %}
   <div class="briefs">{% for b in briefing %}
-    <div class="bitem {{ b.kind }}"><b>{{ b.title }}</b><span>{{ b.detail }}</span>
+    <div class="bitem {{ b.kind }}"><span class="bi">{{ m.icon(bicons[b.kind], 19) }}</span><b>{{ b.title }}</b><span>{{ b.detail }}</span>
       <div class="bact">
         {% if b.approve %}
         <form method="post" action="/decide/approve-selected" onsubmit="return confirm('{{ b.approve_label }} ({{ b.approve|join(', ') }}) at the recommended quantity?')">
           <input type="hidden" name="run_id" value="{{ run.run_id }}"><input type="hidden" name="back" value="/">
           {% for s in b.approve %}<input type="hidden" name="sku_id" value="{{ s }}">{% endfor %}
-          <button class="btn sm green" type="submit">{{ b.approve_label }}</button></form>
+          <button class="btn sm green" type="submit">{{ m.icon('tick', 14) }}{{ b.approve_label }}</button></form>
         {% endif %}
         {% for a in b.links %}<a class="btn sm ghost" href="{{ a.href }}">{{ a.label }}</a>{% endfor %}
       </div>
     </div>{% endfor %}</div>
-</div>
+</section>
 {% endif %}
 
-<div class="grid g2" style="margin-top:18px">
-  <div class="card" style="border-left:4px solid {{ '#c0392b' if to_decide else '#2e8b57' }}">
-    <div class="sec" style="margin:0 0 8px"><h2>Needs your decision</h2>
-      {% if to_decide %}<a class="btn" href="/decisions">Review {{ to_decide }} decision{{ 's' if to_decide != 1 }} →</a>{% endif %}</div>
+<div class="grid g2" style="margin-top:16px">
+  <div class="card" style="border-top:4px solid {{ 'var(--mango)' if to_decide else 'var(--brand-500)' }}">
+    <div class="sec" style="margin:0 0 12px"><h2><span class="hi">{{ m.icon('user-check', 17) }}</span>Needs your decision</h2>
+      {% if to_decide %}<a class="btn sm" href="/decisions">Review {{ to_decide }} decision{{ 's' if to_decide != 1 }} →</a>{% endif %}</div>
     {% if to_decide %}
       <div class="tiles" style="grid-template-columns:repeat(2,1fr)">
-        <div><div class="tile" style="box-shadow:none"><div class="n p">{{ pending.gate1 }}</div><div class="l">Exception{{ 's' if pending.gate1 != 1 }} needing your judgment</div><div class="s">{{ all_lines|selectattr('line_status', 'equalto', 'awaiting_gate1')|map(attribute='sku_id')|join(', ') or '—' }}</div></div></div>
-        <div><div class="tile" style="box-shadow:none"><div class="n b">{{ pending.gate2 }}</div><div class="l">Reorder / pause line{{ 's' if pending.gate2 != 1 }} to approve</div><div class="s">{{ all_lines|selectattr('line_status', 'equalto', 'awaiting_gate2')|map(attribute='sku_id')|join(', ') or '—' }}</div></div></div>
+        <div><div class="tile flat"><div class="n p">{{ pending.gate1 }}</div><div class="l">Exception{{ 's' if pending.gate1 != 1 }} needing your judgment</div><div class="s">{{ all_lines|selectattr('line_status', 'equalto', 'awaiting_gate1')|map(attribute='sku_id')|join(', ') or '—' }}</div></div></div>
+        <div><div class="tile flat"><div class="n b">{{ pending.gate2 }}</div><div class="l">Reorder / pause line{{ 's' if pending.gate2 != 1 }} to approve</div><div class="s">{{ all_lines|selectattr('line_status', 'equalto', 'awaiting_gate2')|map(attribute='sku_id')|join(', ') or '—' }}</div></div></div>
       </div>
     {% else %}<p class="small">Nothing waiting. Every line in run {{ run.run_id }} is decided. <a href="/decisions">See the decisions →</a></p>{% endif %}
     {% if decision_total %}
@@ -63,50 +86,50 @@
   </div>
 
   <div class="card">
-    <div class="sec" style="margin:0 0 8px"><h2>Since the last run</h2>
+    <div class="sec" style="margin:0 0 12px"><h2><span class="hi">{{ m.icon('refresh', 17) }}</span>Since the last run</h2>
       <span class="small">{% if prev %}compared with run {{ prev.run_id }} · {{ prev.run_as_of|ist }}{% endif %}</span></div>
     {% if changes is none %}
       <p class="small">This is the first run, so there's nothing to compare yet. From the next Mon/Thu run, this shows which SKUs became risky and which recovered.</p>
     {% else %}
       <div class="tiles" style="grid-template-columns:repeat(3,1fr)">
-        <div class="tile" style="box-shadow:none"><div class="n r">{{ changes.new|length }}</div><div class="l">Newly flagged</div><div class="s">{{ changes.new|map(attribute='sku_id')|join(', ') or '—' }}</div></div>
-        <div class="tile" style="box-shadow:none"><div class="n g">{{ changes.cleared|length }}</div><div class="l">Back to OK</div><div class="s">{{ changes.cleared|map(attribute='sku_id')|join(', ') or '—' }}</div></div>
-        <div class="tile" style="box-shadow:none"><div class="n">{{ changes.still }}</div><div class="l">Still flagged</div></div>
+        <div class="tile flat"><div class="n r">{{ changes.new|length }}</div><div class="l">Newly flagged</div><div class="s">{{ changes.new|map(attribute='sku_id')|join(', ') or '—' }}</div></div>
+        <div class="tile flat"><div class="n g">{{ changes.cleared|length }}</div><div class="l">Back to OK</div><div class="s">{{ changes.cleared|map(attribute='sku_id')|join(', ') or '—' }}</div></div>
+        <div class="tile flat"><div class="n">{{ changes.still }}</div><div class="l">Still flagged</div></div>
       </div>
     {% endif %}
   </div>
 </div>
 
-<div class="sec"><h2>This run <small>{{ t.skus }} SKUs at Pune Central Warehouse</small></h2></div>
+<div class="sec"><h2><span class="hi">{{ m.icon('chart', 17) }}</span>This run <small>{{ t.skus }} SKUs at Pune Central Warehouse</small></h2></div>
 <div class="tiles">
-  <div class="tile"><div class="n r">{{ t.stockout }}</div><div class="l">Stockout risk</div><div class="s">below the minimum weeks of cover</div></div>
-  <div class="tile"><div class="n o">{{ t.overstock }}</div><div class="l">Overstock risk</div><div class="s">above the maximum weeks</div></div>
-  <div class="tile"><div class="n b">{{ t.high_demand }}</div><div class="l">High demand</div><div class="s">last 4 weeks &gt; +20% vs 12-week avg</div></div>
-  <div class="tile"><div class="n p">{{ t.exceptions }}</div><div class="l">Exceptions</div><div class="s">rules can't settle alone</div></div>
-  <div class="tile"><div class="n">{{ t.reorder_lines }}</div><div class="l">Reorder lines</div><div class="s">{{ all_lines|sum(attribute='qty')|num }} units in total</div></div>
-  <div class="tile"><div class="n g">{{ t.ok }}</div><div class="l">OK, no action</div><div class="s">inside their window</div></div>
+  <div class="tile t-r"><div class="ti">{{ m.icon('alert') }}</div><div class="n r">{{ t.stockout }}</div><div class="l">Stockout risk</div><div class="s">below the minimum weeks of cover</div></div>
+  <div class="tile t-o"><div class="ti">{{ m.icon('box') }}</div><div class="n o">{{ t.overstock }}</div><div class="l">Overstock risk</div><div class="s">above the maximum weeks</div></div>
+  <div class="tile t-b"><div class="ti">{{ m.icon('trend') }}</div><div class="n b">{{ t.high_demand }}</div><div class="l">High demand</div><div class="s">last 4 weeks &gt; +20% vs 12-week avg</div></div>
+  <div class="tile t-p"><div class="ti">{{ m.icon('flag') }}</div><div class="n p">{{ t.exceptions }}</div><div class="l">Exceptions</div><div class="s">rules can't settle alone</div></div>
+  <div class="tile t-n"><div class="ti">{{ m.icon('cart') }}</div><div class="n">{{ t.reorder_lines }}</div><div class="l">Reorder lines</div><div class="s">{{ all_lines|sum(attribute='qty')|num }} units in total</div></div>
+  <div class="tile t-g"><div class="ti">{{ m.icon('check') }}</div><div class="n g">{{ t.ok }}</div><div class="l">OK, no action</div><div class="s">inside their window</div></div>
 </div>
 
 {% set covers = all_lines|selectattr('cover_weeks')|map(attribute='cover_weeks')|list %}
 {% set scale = [16, [covers|max if covers else 0, 24]|min]|max|round(0, 'ceil')|int %}
 <div class="sec" id="stock">
-  <h2>All SKUs <small>weeks of cover now (●) and after the recommended reorder (○), against each SKU's window (green)</small></h2>
+  <h2><span class="hi">{{ m.icon('box', 17) }}</span>All SKUs <small>weeks of cover now (●) and after the recommended reorder (○), against each SKU's window (green)</small></h2>
   <div class="seg">{% for k, v in filters.items() %}<a href="/?show={{ k }}{{ '&run=' ~ run.run_id if run_param }}#stock" class="{{ 'on' if show == k }}">{{ v }}</a>{% endfor %}</div>
 </div>
 <div class="tools">
-  <input type="search" id="sku-q" placeholder="Search SKU, name, category, distributor" aria-label="Search SKUs">
+  <label class="search">{{ m.icon('search', 16) }}<span class="sr">Search SKUs</span><input type="search" id="sku-q" placeholder="Search SKU, name, category, distributor" aria-label="Search SKUs"></label>
   <span class="small mut">Click a column heading to sort</span>
-  <span class="small" id="sku-count" aria-live="polite">{{ lines|length }} SKU{{ 's' if lines|length != 1 }}</span>
+  <span class="src" id="sku-count" aria-live="polite">{{ lines|length }} SKU{{ 's' if lines|length != 1 }}</span>
 </div>
-<div class="card scroll" style="padding:6px 10px">
+<div class="card scroll">
 <table id="skus">
   <thead><tr>
     <th aria-sort="none"><button class="sort" data-key="sku">SKU</button></th>
-    <th>16 weeks <span class="mut" style="font-weight:400">units sold</span></th>
+    <th>16 weeks <span style="font-weight:500;text-transform:none;letter-spacing:0">units sold</span></th>
     <th class="n"><button class="sort" data-key="trend" title="Last 4 weeks against the 12-week average">4-wk vs 12-wk</button></th>
     <th class="n"><button class="sort" data-key="onhand">On hand</button></th>
     <th class="n"><button class="sort" data-key="days">Days of stock</button></th>
-    <th><button class="sort" data-key="cover">Weeks of cover</button> <span class="mut" style="font-weight:400">0 – {{ scale }} w</span></th>
+    <th><button class="sort" data-key="cover">Weeks of cover</button> <span style="font-weight:500;text-transform:none;letter-spacing:0">0 – {{ scale }} w</span></th>
     <th>Flag</th><th>Recommendation</th><th>Status</th>
   </tr></thead>
   <tbody>
@@ -114,10 +137,10 @@
   <tr data-q="{{ (l.sku_id ~ ' ' ~ l.sku_name ~ ' ' ~ l.category ~ ' ' ~ l.distributor_name ~ ' ' ~ l.distributor_id)|lower }}"
       data-sku="{{ l.sku_id }}" data-trend="{{ l.change_pct if l.change_pct is not none }}" data-onhand="{{ l.on_hand }}"
       data-days="{{ l.days_left if l.days_left is not none }}" data-cover="{{ l.cover_weeks if l.cover_weeks is not none }}">
-    <td><a href="/sku/{{ l.sku_id }}{{ '?run=' ~ run.run_id if run_param }}"><b>{{ l.sku_name|short }}</b></a>{% if l.perishability == 'High' %} <span class="chip warn" title="High perishability: 3–4 week window">perishable</span>{% endif %}
-      <br><span class="mut" style="font-size:12px">{{ l.sku_id }} · {{ l.category }} · {{ m.distributor(l) }}</span></td>
+    <td><div class="skuname">{{ m.avatar(l) }}<div><a href="/sku/{{ l.sku_id }}{{ '?run=' ~ run.run_id if run_param }}">{{ l.sku_name|short }}</a>{% if l.perishability == 'High' %} <span class="chip warn" title="High perishability: 3–4 week window">perishable</span>{% endif %}
+      <br><span class="mut" style="font-size:12px">{{ l.sku_id }} · {{ l.category }} · {{ m.distributor(l) }}</span></div></div></td>
     <td>{{ m.spark(l.spark) }}</td>
-    <td class="n">{% if l.change_pct is not none %}<span style="color:{{ 'var(--blue)' if l.flag_high_demand else 'inherit' }};font-weight:{{ 700 if l.flag_high_demand else 400 }}">{{ '%+.0f'|format(l.change_pct) }}%</span>{% else %}<span class="mut">—</span>{% endif %}</td>
+    <td class="n">{% if l.change_pct is not none %}<span style="color:{{ 'var(--blue)' if l.flag_high_demand else ('var(--red)' if l.change_pct < -10 else 'inherit') }};font-weight:{{ 800 if l.flag_high_demand else 600 }}">{{ '%+.0f'|format(l.change_pct) }}%</span>{% else %}<span class="mut">—</span>{% endif %}</td>
     <td class="n">{{ l.on_hand|num }}</td>
     <td class="n">{{ m.days(l) }}</td>
     <td>{{ m.cover_bar(l, scale) }}<br><span class="small"><b>{{ l.cover_weeks|fmtw }} w</b>{% if l.cover_after is not none %} → {{ l.cover_after|fmtw }} w{% endif %} <span class="mut">· window {{ l.min_weeks|wk }}–{{ l.max_weeks|wk }} w</span></span></td>
@@ -129,7 +152,7 @@
   </tbody>
 </table>
 </div>
-<p class="small">Cover = (on hand{% if run.zoho_status == 'ok' %} + open POs{% endif %}) ÷ weekly demand{% if run.festival_month %} incl. the +{{ ((run.uplift - 1) * 100)|round|int }}% festival uplift{% endif %}. Days of stock counts on-hand units only. The sparkline's shaded end is the last 4 weeks. Click an SKU for its sales trend and reasoning.</p>
+<p class="small mut">Cover = (on hand{% if run.zoho_status == 'ok' %} + open POs{% endif %}) ÷ weekly demand{% if run.festival_month %} incl. the +{{ ((run.uplift - 1) * 100)|round|int }}% festival uplift{% endif %}. Days of stock counts on-hand units only. The sparkline's shaded end is the last 4 weeks. Click an SKU for its sales trend and reasoning.</p>
 <script>
 (function () {
   var table = document.getElementById('skus'); if (!table) return;
@@ -160,16 +183,16 @@
 </script>
 
 {% set s = impact.stats %}{% set o = impact.totals %}
-<div class="sec"><h2>Impact so far</h2><a href="/impact" class="small">Impact &amp; rules →</a></div>
+<div class="sec"><h2><span class="hi">{{ m.icon('trend', 17) }}</span>Impact so far</h2><a href="/impact" class="btn sm ghost">Impact &amp; rules {{ m.icon('arrow', 14) }}</a></div>
 <div class="tiles">
-  <div class="tile"><div class="n">{{ s.accepted|rate(s.all_decisions) }}</div><div class="l">Accepted as recommended</div><div class="s">{{ s.all_decisions }} decisions so far</div></div>
-  <div class="tile"><div class="n {{ 'r' if s.all_decisions and s.overridden / s.all_decisions > 0.2 }}">{{ s.overridden|rate(s.all_decisions) }}</div><div class="l">Changed or overridden</div><div class="s">kill line: above 20% after shadow mode</div></div>
-  <div class="tile"><div class="n r">{{ o.stockout_incidents }}</div><div class="l">Stockout incidents</div><div class="s">baseline ₹18–22L lost per quarter</div></div>
-  <div class="tile"><div class="n o">{{ o.units_written_off|num }}</div><div class="l">Units written off</div><div class="s">baseline ₹10–12L per quarter</div></div>
+  <div class="tile t-g"><div class="ti">{{ m.icon('check') }}</div><div class="n">{{ s.accepted|rate(s.all_decisions) }}</div><div class="l">Accepted as recommended</div><div class="s">{{ s.all_decisions }} decisions so far</div></div>
+  <div class="tile t-p"><div class="ti">{{ m.icon('flag') }}</div><div class="n {{ 'r' if s.all_decisions and s.overridden / s.all_decisions > 0.2 }}">{{ s.overridden|rate(s.all_decisions) }}</div><div class="l">Changed or overridden</div><div class="s">kill line: above 20% after shadow mode</div></div>
+  <div class="tile t-r"><div class="ti">{{ m.icon('alert') }}</div><div class="n r">{{ o.stockout_incidents }}</div><div class="l">Stockout incidents</div><div class="s">baseline ₹18–22L lost per quarter</div></div>
+  <div class="tile t-o"><div class="ti">{{ m.icon('trash') }}</div><div class="n o">{{ o.units_written_off|num }}</div><div class="l">Units written off</div><div class="s">baseline ₹10–12L per quarter</div></div>
 </div>
 
-<form method="get" action="/" class="inline" style="margin-top:18px">
-  <span class="small">Look at an earlier run:</span>
+<form method="get" action="/" class="inline card" style="margin-top:20px;padding:12px 16px;box-shadow:none">
+  <span class="small" style="font-weight:600">{{ m.icon('history', 16) }} Look at an earlier run:</span>
   <select name="run" aria-label="Run">{% for r in runs %}<option value="{{ r.run_id }}" {{ 'selected' if r.run_id == run.run_id }}>Run {{ r.run_id }} · {{ r.run_as_of|ist }}{{ ' · shadow' if r.shadow_mode }}</option>{% endfor %}</select>
   <button class="btn ghost sm" type="submit">Show</button>
 </form>
