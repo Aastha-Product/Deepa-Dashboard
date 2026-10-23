@@ -264,3 +264,27 @@ def test_write_off_validation(app_client):
 def test_data_and_runs_page(app_client):
     html = app_client.get("/admin").text
     assert "Upload an SAP export" in html and "Run now" in html and "Recent runs" in html
+
+
+def test_connections_panel(app_client, monkeypatch):
+    monkeypatch.setattr(main.connections, "full", lambda conn: [
+        {"name": "Supabase database", "status": "ok", "detail": "connected · 15 SKUs in the master", "fix": ""},
+        {"name": "Zoho Inventory (open POs)", "status": "missing", "detail": "not connected", "fix": "Run tools/zoho_setup.py"}])
+    html = app_client.get("/admin").text
+    assert 'id="connections"' in html and "Supabase database" in html and "working" in html
+    assert "not set up" in html and "What to do: Run tools/zoho_setup.py" in html
+
+
+def test_header_counts_missing_connections(app_client, monkeypatch):
+    for k in ("CRON_SECRET", "ANTHROPIC_API_KEY", "SMTP_HOST", "ZOHO_CLIENT_ID"):
+        monkeypatch.delenv(k, raising=False)
+    assert "4 connections not set up" in app_client.get("/").text
+    monkeypatch.setattr(main.connections, "missing_count", lambda: 0)
+    assert "All connections working" in app_client.get("/").text
+
+
+def test_overview_headline_and_progress(app_client):
+    html = app_client.get("/").text
+    assert "7 of 15 SKUs need attention" in html and "7 decisions waiting" in html
+    assert "0 of 7 lines decided this run" in html
+    assert "Exception 1" in html and "Stockout risk 4" in html and "Overstock risk 2" in html and "OK 8" in html

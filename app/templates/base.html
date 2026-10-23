@@ -69,6 +69,16 @@ form.inline{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .seg a{padding:6px 12px;color:var(--ink-2);font-size:13px;border-right:1px solid var(--line)} .seg a:last-child{border-right:0}
 .seg a.on{background:var(--ink);color:#fff;text-decoration:none} .seg a:hover{text-decoration:none;background:#f0f3f9} .seg a.on:hover{background:var(--ink)}
 .trace{margin:8px 0 0;padding-left:18px} .trace li{margin:2px 0}
+.conn{font-size:12px;color:#d3dbec} .conn::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.conn.ok::before{background:#7ee2a8} .conn.warn::before{background:#ffd27a} .conn:hover{color:#fff}
+tbody tr:hover td,table tr:hover td{background:#f8fafd}
+.headline{font-size:20px;font-weight:600;line-height:1.35;margin:20px 0 4px} .headline .mut{font-weight:400}
+.dist{display:flex;height:12px;border-radius:6px;overflow:hidden;background:#e8ecf4;margin:10px 0 6px}
+.dist span{display:block;height:100%} .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.progress{height:8px;border-radius:4px;background:#e8ecf4;overflow:hidden;margin:8px 0 4px} .progress span{display:block;height:100%;background:var(--green)}
+.check{display:grid;grid-template-columns:22px 1fr;gap:4px 10px;padding:10px 0;border-bottom:1px solid #eef1f7} .check:last-child{border-bottom:0}
+.check .dot{width:12px;height:12px;border-radius:50%;margin-top:4px} .dot.ok{background:var(--green)} .dot.missing{background:#e0a100} .dot.error{background:var(--red)}
 footer{max-width:1440px;margin:0 auto;padding:0 28px 28px;color:var(--mut);font-size:12px}
 @media (max-width:720px){.top,.banners,.wrap,footer{padding-left:16px;padding-right:16px}.runbox{text-align:left}.g2,.g3{grid-template-columns:1fr}}
 </style>
@@ -86,6 +96,7 @@ footer{max-width:1440px;margin:0 auto;padding:0 28px 28px;color:var(--mut);font-
           {% else %}<span class="pill bad">data {{ run.data_age_hours|fmt1 }} h old</span>{% endif %}
           {% if run.festival_month %}<span class="pill fest">festival +{{ ((run.uplift - 1) * 100)|round|int }}%</span>{% endif %}</div>
       {% else %}<div>No completed run yet</div>{% endif %}
+      <div style="margin-top:4px"><a href="/admin#connections" class="conn {{ 'ok' if not not_connected else 'warn' }}">{% if not not_connected %}All connections working{% else %}{{ not_connected }} connection{{ 's' if not_connected != 1 }} not set up{% endif %}</a></div>
     </div>
   </div>
   <nav class="tabs">

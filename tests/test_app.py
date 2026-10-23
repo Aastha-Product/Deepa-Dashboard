@@ -27,6 +27,7 @@ def client(monkeypatch):
 def test_health(client):
     body = client.get("/api/health").json()
     assert body["ok"] is True and body["cron_secret"] is True and body["db"] in ("ok", "unavailable")
+    assert set(body) == {"ok", "cron_secret", "zoho", "claude", "email", "db"}
 
 
 @pytest.mark.parametrize("header", [None, "Bearer wrong", "s3cret-for-tests"])

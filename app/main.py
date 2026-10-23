@@ -14,7 +14,7 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadF
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app import auth, queries
+from app import auth, connections, queries
 from job import db, ingest, run as job_run, storage, thresholds
 
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +37,7 @@ def _num(value, digits=1):
 
 templates.env.filters.update(
     ist=_ist,
+    day=lambda v: v.astimezone(ingest.IST).strftime("%a %d %b") if isinstance(v, datetime) else str(v or "—"),
     fmt1=lambda v: _num(v, 1),
     fmtw=lambda v: _num(v, 1),
     wk=lambda v: "—" if v is None else f"{float(v):g}",      # window limits: 6, 14, 3, 4
@@ -54,7 +55,7 @@ def _page(request, name, conn, tab, run, **ctx):
     pending = _pending(queries.lines(conn, run["run_id"])) if run else {"gate1": 0, "gate2": 0}
     return templates.TemplateResponse(request, name, {
         "user": auth.current_user(), "tab": tab, "run": run, "latest": queries.latest_run(conn),
-        "pending": pending, "run_param": "run" in params,
+        "pending": pending, "run_param": "run" in params, "not_connected": connections.missing_count(),
         "flash": params.get("msg"), "flash_kind": params.get("kind", "ok"), **ctx})
 
 
@@ -99,8 +100,9 @@ def _check_cron_secret(authorization: str | None) -> None:
 
 @app.get("/api/health")
 def health():
-    """Up, plus whether the database and the cron secret are configured (no details leaked)."""
-    status = {"ok": True, "cron_secret": bool(os.environ.get("CRON_SECRET"))}
+    """Up, plus which connections are configured (booleans only, no details leaked)."""
+    q = connections.quick()
+    status = {"ok": True, "cron_secret": q["cron"], "zoho": q["zoho"], "claude": q["claude"], "email": q["email"]}
     try:
         with db.connect() as conn:
             conn.execute("SELECT 1")
@@ -141,7 +143,13 @@ def overview(request: Request):
             "ok": [l for l in lines if not _flagged(l)],
         }.get(show, lines)
         ts = thresholds.read()
+        group = lambda l: ("exception" if l["exception_type"] else "stockout" if l["flag_stockout"] else
+                           "overstock" if l["flag_overstock"] else "high_demand" if l["flag_high_demand"] else "ok")
+        groups = {g: sum(group(l) == g for l in lines) for g in ("exception", "stockout", "overstock", "high_demand", "ok")}
+        to_decide = [l for l in lines if l["exception_type"] or l["action"] in ("reorder", "pause")]
+        decided = sum(l["line_status"] not in ("awaiting_gate1", "awaiting_gate2") for l in to_decide)
         return _page(request, "overview.html", conn, "overview", run, lines=shown, all_lines=lines,
+                     groups=groups, decided=decided, decision_total=len(to_decide),
                      t=queries.tiles(lines), changes=changes, prev=prev, show=show if show in FILTERS else "all",
                      filters=FILTERS, runs=queries.recent_runs(conn), impact=queries.impact(conn),
                      version=queries.threshold_version(conn, ts.content_hash))
@@ -205,7 +213,8 @@ def impact(request: Request):
 @app.get("/admin", response_class=HTMLResponse)
 def admin(request: Request):
     with db.connect() as conn:
-        return _page(request, "admin.html", conn, "admin", queries.run(conn), recent=queries.all_runs(conn))
+        return _page(request, "admin.html", conn, "admin", queries.run(conn), recent=queries.all_runs(conn),
+                     checks=connections.full(conn))
 
 
 # --- rules sign-off (map step 0) ---------------------------------------------------------------

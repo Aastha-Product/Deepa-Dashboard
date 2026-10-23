@@ -64,6 +64,17 @@ copy .env.example .env        # then add the Supabase pooler connection string a
 .venv\Scripts\python -m pytest -q
 ```
 
+## Connections
+**Data & runs → Connections** checks each service live: Supabase database, Supabase storage, the Vercel schedule, Zoho, Claude and email. The header shows "All connections working" or how many aren't set up.
+
+### Connect Zoho Inventory (read-only, India data centre)
+1. At https://api-console.zoho.in: **Add Client → Self Client → Create**.
+2. **Generate Code** with scopes `ZohoInventory.purchaseorders.READ,ZohoInventory.items.READ,ZohoInventory.settings.READ`, valid for 10 minutes.
+3. Run `.venv\Scripts\python tools\zoho_setup.py` in a normal Windows terminal and paste the Client ID, Client Secret and code. Input is hidden. The script finds the organisation, checks it can read items and purchase orders, and writes `.env` and `zoho.vercel.env`.
+4. In Vercel → deepa-dashboard → Settings → Environment Variables, click **Import .env**, choose `zoho.vercel.env`, save and redeploy. Then delete `zoho.vercel.env`.
+
+Item SKUs in Zoho must be SKU001…SKU015, because purchase-order lines only carry Zoho's `item_id` and the app maps it to the SKU through the items list.
+
 ## Supabase + GitHub
 - **Project:** `Deepa-Dashboard` (ref `tjhulermfpkbanrwesmy`, region ap-southeast-2), in Aastha-Product's Org.
 - **Integration:** linked to this repo, working directory `.`, deploy to production from `main` (on since 23 Oct 2026).

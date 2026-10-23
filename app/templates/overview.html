@@ -7,6 +7,18 @@
     <p class="small">Runs happen every Monday and Thursday at 06:00 IST. To start one now, upload an export on <a href="/admin">Data &amp; runs</a>.</p></div>
 {% else %}
 {% set to_decide = pending.gate1 + pending.gate2 %}
+{% set attention = t.skus - t.ok %}
+
+<p class="headline">Run {{ run.run_id }} · {{ run.run_as_of|day }}:
+  {{ attention }} of {{ t.skus }} SKUs need attention
+  <span class="mut">· {{ t.stockout }} at stockout risk, {{ t.overstock }} overstocked{% if t.exceptions %}, {{ t.exceptions }} exception{{ 's' if t.exceptions != 1 }}{% endif %} ·
+  {% if to_decide %}{{ to_decide }} decision{{ 's' if to_decide != 1 }} waiting{% else %}all decided{% endif %}</span></p>
+{% set seg = [('exception', '#6a4bc4', 'Exception'), ('stockout', '#c0392b', 'Stockout risk'), ('overstock', '#d08a1a', 'Overstock risk'),
+              ('high_demand', '#2f6fd6', 'High demand only'), ('ok', '#2e8b57', 'OK')] %}
+<div class="dist" role="img" aria-label="SKUs by status">
+  {% for k, colour, label in seg %}{% if groups[k] %}<span style="width:{{ 100 * groups[k] / t.skus }}%;background:{{ colour }}" title="{{ label }}: {{ groups[k] }}"></span>{% endif %}{% endfor %}
+</div>
+<div class="legend">{% for k, colour, label in seg %}{% if groups[k] %}<span><i style="background:{{ colour }}"></i>{{ label }} {{ groups[k] }}</span>{% endif %}{% endfor %}</div>
 
 <div class="grid g2" style="margin-top:18px">
   <div class="card" style="border-left:4px solid {{ '#c0392b' if to_decide else '#2e8b57' }}">
@@ -17,7 +29,11 @@
         <div><div class="tile" style="box-shadow:none"><div class="n p">{{ pending.gate1 }}</div><div class="l">Exception{{ 's' if pending.gate1 != 1 }} needing your judgment</div><div class="s">{{ all_lines|selectattr('line_status', 'equalto', 'awaiting_gate1')|map(attribute='sku_id')|join(', ') or '—' }}</div></div></div>
         <div><div class="tile" style="box-shadow:none"><div class="n b">{{ pending.gate2 }}</div><div class="l">Reorder / pause line{{ 's' if pending.gate2 != 1 }} to approve</div><div class="s">{{ all_lines|selectattr('line_status', 'equalto', 'awaiting_gate2')|map(attribute='sku_id')|join(', ') or '—' }}</div></div></div>
       </div>
-    {% else %}<p class="small">Nothing waiting. Every line in run {{ run.run_id }} is decided.</p>{% endif %}
+    {% else %}<p class="small">Nothing waiting. Every line in run {{ run.run_id }} is decided. <a href="/decisions">See the decisions →</a></p>{% endif %}
+    {% if decision_total %}
+    <div class="progress" role="img" aria-label="{{ decided }} of {{ decision_total }} decided"><span style="width:{{ 100 * decided / decision_total }}%"></span></div>
+    <div class="small">{{ decided }} of {{ decision_total }} lines decided this run</div>
+    {% endif %}
     {% if not (version and version.signed_off_by) %}<p class="small" style="margin-top:10px"><span class="chip stop">Rules not signed off</span> The next run will stop until you sign them off on <a href="/impact">Impact &amp; rules</a>.</p>{% endif %}
   </div>
 

@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Data &amp; runs{% endblock %}
 {% block body %}
+<div class="sec" id="connections"><h2>Connections <small>checked live each time this page opens</small></h2></div>
+<div class="card">
+  {% for c in checks %}
+  <div class="check">
+    <span class="dot {{ c.status }}" aria-hidden="true"></span>
+    <div><b>{{ c.name }}</b> <span class="chip {{ 'done' if c.status == 'ok' else ('warn' if c.status == 'missing' else 'stop') }}">{{ {'ok': 'working', 'missing': 'not set up', 'error': 'error'}[c.status] }}</span>
+      <div class="small">{{ c.detail }}</div>
+      {% if c.fix %}<div class="small mut">What to do: {{ c.fix }}</div>{% endif %}</div>
+  </div>
+  {% endfor %}
+</div>
+
 <div class="grid g2" style="margin-top:18px">
 <div class="card">
   <h3>Upload an SAP export</h3>
