@@ -3,9 +3,28 @@
 MESA AI-Native Track, Term 2, Case 01 ("Deepa's 90-Day Mandate"): the Demand Planning build, on Supabase + Vercel + Zoho.
 Plan: `../03-build-implementation-plan.md` · Components map: `Freshroots_Components_Map_Demand_Planning.pdf`
 
-**Status:**
-- P0 (setup) and P1 (knowledge files + thresholds) are done.
-- P2 onwards isn't built yet.
+**Live:** https://deepa-dashboard.vercel.app (Vercel project `deepa-dashboard`, deployed from `main`)
+
+**Status:** P0–P9 built. Waiting on secrets in Vercel and `.env` (database password, keys) before the first real run. P10 (end-to-end run on Supabase and the demo) is next.
+
+| Phase | What | Where |
+|---|---|---|
+| P1 | Thresholds, versions, sign-off | `knowledge/`, `job/thresholds.py` |
+| P2 | Tables, `sap-exports` bucket, reference data | `supabase/migrations/` |
+| P3 | SAP export reader, 48 h check, Zoho (read-only) | `job/ingest.py`, `job/storage.py`, `job/zoho.py` |
+| P4 | Rules engine + golden test | `job/rules.py`, `tests/test_rules.py` |
+| P5 | Claude reasons (text only, with fallback) | `job/explain.py` |
+| P6 | Run orchestration, cron endpoint | `job/run.py`, `app/main.py`, `vercel.json` |
+| P7 | Dashboard: sign-in + 5 tabs | `app/`, `app/templates/` |
+| P8 | Summary email + IT alert | `job/notify.py` |
+| P9 | Gate 1 / Gate 2 forms, write-offs, impact | `app/main.py`, `app/queries.py` |
+
+## Dashboard access
+Sign-in is by email link (Supabase Auth). A person needs both:
+1. A Supabase Auth user: Supabase → Authentication → Users → **Add user → Send invite**.
+2. A row in the `app_users` table: email (lowercase), name, and role `raghav`, `procurement`, `deepa`, `it` or `viewer`.
+
+In Supabase → Authentication → URL Configuration, set the **Site URL** to `https://deepa-dashboard.vercel.app` and add `https://deepa-dashboard.vercel.app/auth/callback` to the redirect URLs.
 
 ## Layout
 | Path | What |

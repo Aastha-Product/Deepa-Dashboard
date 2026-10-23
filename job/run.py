@@ -31,6 +31,7 @@ class RunSummary:
     counts: dict = field(default_factory=dict)
     exceptions: list = field(default_factory=list)
     reorders: list = field(default_factory=list)
+    email: str = ""
 
     def as_dict(self):
         return self.__dict__.copy()
@@ -135,6 +136,13 @@ def execute(conn, *, triggered_by: str, run_as_of: datetime = None, local_folder
         raise
 
 
+def execute_and_notify(conn, **kwargs) -> RunSummary:
+    from job import notify
+    summary = execute(conn, **kwargs)
+    summary.email = notify.after_run(summary)
+    return summary
+
+
 def upload_seed(export_id: str = SEED_EXPORT_ID) -> None:
     for name in (ingest.SALES_FILE, ingest.INVENTORY_FILE):
         storage.upload_text(f"{export_id}/{name}", (config.DATA_DIR / "seed" / name).read_text(encoding="utf-8"))
@@ -155,8 +163,8 @@ def main(argv=None) -> int:
         return 0
     from job import db
     with db.connect() as conn:
-        s = execute(conn, triggered_by="cli", local_folder=args.local, export_id=args.export_id,
-                    run_as_of=datetime.fromisoformat(args.as_of) if args.as_of else None)
+        s = execute_and_notify(conn, triggered_by="cli", local_folder=args.local, export_id=args.export_id,
+                               run_as_of=datetime.fromisoformat(args.as_of) if args.as_of else None)
     print(json.dumps(s.as_dict(), indent=2, default=str))
     return 0 if s.status == "ok" else 1
 

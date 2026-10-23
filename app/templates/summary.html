@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Run summary{% endblock %}
+{% block body %}
+{% if not run %}
+  <div class="card"><b>No completed run yet.</b>
+    <p class="small">Runs happen Mon + Thu at 06:00 IST. {% if user.role in ('raghav', 'it') %}You can upload an export and start one from <a href="/admin">Exports &amp; runs</a>.{% endif %}</p></div>
+{% else %}
+<form class="filters" method="get" action="/">
+  <select name="run" aria-label="Run">{% for r in runs %}<option value="{{ r.run_id }}" {{ 'selected' if r.run_id == run.run_id }}>Run {{ r.run_id }} · {{ r.run_as_of|ist }}{{ ' · shadow' if r.shadow_mode }}</option>{% endfor %}</select>
+  <select name="flag" aria-label="Flag"><option value="">Flag: all</option>
+    {% for k, v in [('stockout', 'Stockout risk'), ('overstock', 'Overstock risk'), ('high_demand', 'High demand'), ('exception', 'Exceptions'), ('ok', 'OK')] %}<option value="{{ k }}" {{ 'selected' if f.flag == k }}>{{ v }}</option>{% endfor %}</select>
+  <select name="perishability" aria-label="Perishability"><option value="">Perishability: all</option>
+    {% for k in ['Low', 'High'] %}<option {{ 'selected' if f.perishability == k }}>{{ k }}</option>{% endfor %}</select>
+  <select name="distributor" aria-label="Linked distributor"><option value="">Linked distributor: all</option>
+    {% for d in options.distributors %}<option value="{{ d.distributor_id }}" {{ 'selected' if f.distributor == d.distributor_id }}>{{ d.distributor_name }}</option>{% endfor %}</select>
+  <select name="category" aria-label="Category"><option value="">Category: all</option>
+    {% for c in options.categories %}<option {{ 'selected' if f.category == c }}>{{ c }}</option>{% endfor %}</select>
+  <button class="btn ghost" type="submit">Apply</button> <a href="/" class="small">Reset</a>
+</form>
+
+<div class="sec">Run summary</div>
+<div class="tiles">
+  <div class="tile"><div class="n">{{ t.skus }}</div><div class="l">SKUs checked</div></div>
+  <div class="tile"><div class="n r">{{ t.stockout }}</div><div class="l">Stockout risk</div></div>
+  <div class="tile"><div class="n o">{{ t.overstock }}</div><div class="l">Overstock risk</div></div>
+  <div class="tile"><div class="n b">{{ t.high_demand }}</div><div class="l">High demand</div></div>
+  <div class="tile"><div class="n p">{{ t.exceptions }}</div><div class="l">Exceptions for Raghav</div></div>
+  <div class="tile"><div class="n">{{ t.reorder_lines }}</div><div class="l">Reorder lines</div></div>
+  <div class="tile"><div class="n g">{{ t.ok }}</div><div class="l">OK, no action</div></div>
+</div>
+
+<div class="sec">SKU action list · one row per SKU, most urgent first</div>
+<div class="card scroll"><table>
+  <tr><th>SKU</th><th>Item</th><th>Perish.</th><th>Linked distributor</th><th>Last 4w avg</th><th>12w avg</th><th>Change</th>
+      <th>Demand{% if run.festival_month %} +{{ ((run.uplift - 1) * 100)|round|int }}%{% endif %}</th><th>On hand</th><th>Open POs</th><th>Cover</th><th>Window</th>
+      <th>Flag</th><th>Recommended</th><th>Cover after</th><th>Reason</th><th>Next step</th></tr>
+  {% for l in lines %}
+  <tr class="{{ 'exc' if l.exception_type }}">
+    <td><a href="/sku/{{ l.sku_id }}?run={{ run.run_id }}"><b>{{ l.sku_id }}</b></a></td>
+    <td>{{ l.sku_name|replace('Freshroots ', '') }}</td><td>{{ l.perishability }}</td><td>{{ l.distributor_name }}</td>
+    <td class="n">{{ l.last4_avg|fmt1 }}</td><td class="n">{{ l.avg12|fmt1 }}</td><td class="n">{{ l.change_pct|pct }}</td>
+    <td class="n">{{ l.demand_weekly|fmt1 }}</td><td class="n">{{ l.on_hand|num }}</td>
+    <td class="n">{% if l.open_po_qty is none %}<span class="mut">unknown</span>{% else %}{{ l.open_po_qty|num }}{% endif %}</td>
+    <td class="n"><b>{{ l.cover_weeks|fmtw }}{% if l.cover_weeks is not none %} w{% endif %}</b></td>
+    <td class="n mut">{{ l.min_weeks|wk }}–{{ l.max_weeks|wk }} w</td>
+    <td>{{ m.flags(l) }}</td><td>{{ m.action(l) }}</td>
+    <td class="n">{% if l.cover_after is not none %}{{ l.cover_after|fmtw }} w{% if l.qty_basis == 'topup' %} <span class="chip warn">topped up</span>{% endif %}{% else %}<span class="mut">—</span>{% endif %}</td>
+    <td class="rs">{{ l.reason }}</td>
+    <td>{{ m.status(l) }}</td>
+  </tr>
+  {% else %}<tr><td colspan="17" class="mut">No SKUs match these filters.</td></tr>{% endfor %}
+</table>
+<p class="small">Cover = (on hand + open POs) ÷ (12-week average × festival uplift). Window = Raghav's minimum–maximum weeks (perishables 3–4). Reasons by {{ 'Claude' if run.reasons_source == 'claude' else ('Claude and the rules engine' if run.reasons_source == 'mixed' else 'the rules engine') }}; every number comes from the rules in code.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,56 @@
+{% macro flags(l) -%}
+  {%- if l.flag_high_demand %}<span class="chip hd">High demand</span>{% endif -%}
+  {%- if l.flag_stockout %}<span class="chip so">Stockout risk</span>{% endif -%}
+  {%- if l.flag_overstock %}<span class="chip ov">Overstock risk</span>{% endif -%}
+  {%- if l.exception_type %}<span class="chip ex">{{ l.exception_type|replace('_', ' ')|capitalize }}</span>{% endif -%}
+  {%- if not (l.flag_high_demand or l.flag_stockout or l.flag_overstock or l.exception_type) %}<span class="chip ok">OK</span>{% endif -%}
+{%- endmacro %}
+
+{% macro action(l) -%}
+  {%- if l.action == 'reorder' -%}
+    Reorder <b>{{ l.qty }}</b> <span class="mut">({% if l.qty_basis == '1.5x' %}1.5 &times; {{ l.standard_reorder_qty }}{% elif l.qty_basis == 'topup' %}std {{ l.standard_reorder_qty }} topped up to {{ l.min_weeks|wk }} w{% else %}std qty{% endif %})</span>
+  {%- elif l.action == 'pause' -%}Pause next order
+  {%- elif l.action == 'review' -%}Raghav to decide
+  {%- else -%}<span class="mut">No action</span>{%- endif -%}
+{%- endmacro %}
+
+{% set STATUS = {'awaiting_gate1': 'Gate 1 · Raghav', 'awaiting_gate2': 'Gate 2 · Procurement', 'approved': 'Approved, awaiting PO',
+                 'po_recorded': 'PO recorded in Zoho', 'overridden': 'Overridden by Raghav', 'no_action': '—'} %}
+{% macro status(l) -%}<span class="st {{ l.line_status }}">{{ STATUS[l.line_status] }}</span>{%- endmacro %}
+
+{% macro chart(weeks, avg12, last4_weeks, window_weeks, threshold_pct) -%}
+{%- if weeks -%}
+{%- set W, H, P = 640, 230, 36 -%}
+{%- set vals = weeks|map(attribute='units_sold')|list -%}
+{%- set hi = [vals|max, (avg12 or 0) * (1 + threshold_pct / 100)]|max * 1.12 -%}
+{%- set lo = [vals|min * 0.85, 0]|max -%}
+{%- set n = weeks|length -%}
+{%- macro X(i) %}{{ P + i * (W - 2 * P) / ([n - 1, 1]|max) }}{% endmacro -%}
+{%- macro Y(v) %}{{ H - P - (v - lo) / ([hi - lo, 1]|max) * (H - 2 * P) }}{% endmacro -%}
+<svg viewBox="0 0 {{ W }} {{ H }}" width="100%" role="img" aria-label="Weekly units sold">
+  {%- set names = weeks|map(attribute='iso_week')|list -%}
+  {%- if window_weeks and window_weeks[0] in names -%}
+    {%- set a = names.index(window_weeks[0]) -%}
+    <rect x="{{ X(a) }}" y="{{ P - 8 }}" width="{{ X(n - 1)|float - X(a)|float }}" height="{{ H - 2 * P + 8 }}" fill="#eef3fb"/>
+    <text x="{{ X(a)|float + 6 }}" y="{{ P + 4 }}" font-size="11" fill="#5a6b8c">12-week window</text>
+  {%- endif -%}
+  {%- if last4_weeks and last4_weeks[0] in names -%}
+    {%- set b = names.index(last4_weeks[0]) -%}
+    <rect x="{{ X(b) }}" y="{{ P + 12 }}" width="{{ X(n - 1)|float - X(b)|float }}" height="{{ H - 2 * P - 12 }}" fill="#fdf0d8"/>
+    <text x="{{ X(b)|float + 4 }}" y="{{ P + 25 }}" font-size="11" fill="#9a6a10">last 4 weeks</text>
+  {%- endif -%}
+  {%- if avg12 -%}
+    <line x1="{{ P }}" x2="{{ W - P }}" y1="{{ Y(avg12) }}" y2="{{ Y(avg12) }}" stroke="#5a6b8c" stroke-dasharray="5 4"/>
+    <text x="{{ W - P - 4 }}" y="{{ Y(avg12)|float + 14 }}" font-size="11" fill="#5a6b8c" text-anchor="end">12-wk avg {{ avg12|fmt1 }}</text>
+    {%- set t = avg12 * (1 + threshold_pct / 100) -%}
+    <line x1="{{ P }}" x2="{{ W - P }}" y1="{{ Y(t) }}" y2="{{ Y(t) }}" stroke="#c0392b" stroke-dasharray="3 3"/>
+    <text x="{{ P + 4 }}" y="{{ Y(t)|float - 5 }}" font-size="11" fill="#c0392b">+{{ threshold_pct|int }}% line {{ t|round|int }}</text>
+  {%- endif -%}
+  <polyline fill="none" stroke="#2f6fd6" stroke-width="2.5" points="{% for w in weeks %}{{ X(loop.index0) }},{{ Y(w.units_sold) }} {% endfor %}"/>
+  {%- for w in weeks %}<circle cx="{{ X(loop.index0) }}" cy="{{ Y(w.units_sold) }}" r="3" fill="#2f6fd6"><title>{{ w.iso_week }}: {{ w.units_sold }}</title></circle>{% endfor -%}
+  <line x1="{{ P }}" x2="{{ W - P }}" y1="{{ H - P }}" y2="{{ H - P }}" stroke="#ccd"/>
+  <text x="{{ P }}" y="{{ H - 12 }}" font-size="11" fill="#667">{{ names[0] }}</text>
+  <text x="{{ W - P - 52 }}" y="{{ H - 12 }}" font-size="11" fill="#667">{{ names[-1] }}</text>
+</svg>
+{%- else -%}<p class="mut">No weekly sales in this export.</p>{%- endif -%}
+{%- endmacro %}

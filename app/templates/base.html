@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Demand Planning{% endblock %} · Freshroots</title>
+<style>
+:root{--ink:#1c2a4a;--mut:#5a6b8c;--line:#dde3ee;--bg:#f4f6fa;--card:#fff;--blue:#2f6fd6;--red:#c0392b;--amber:#a86400;--green:#2e8b57;--purple:#6a4bc4;--teal:#1f7a8c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font:13.5px/1.45 'Segoe UI',system-ui,Arial,sans-serif;color:var(--ink)}
+a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+.top{background:var(--ink);color:#fff;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.top h1{font-size:19px;margin:0} .top .meta{font-size:12.5px;color:#d0d8ea} .top .meta b{color:#fff}
+.top .who{font-size:12.5px;color:#d0d8ea;text-align:right} .top .who a{color:#fff}
+.banner{padding:8px 24px;font-weight:600;font-size:12.5px}
+.banner.shadow{background:#e8e2f8;color:#4b3a8a} .banner.stop{background:#fde4e1;color:#8a1f12} .banner.warn{background:#fff3cd;color:#7a5a00}
+.tabs{display:flex;gap:2px;padding:0 24px;background:#fff;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs a{padding:11px 14px;color:var(--mut);font-weight:600;white-space:nowrap;border-bottom:3px solid transparent}
+.tabs a.on{color:var(--blue);border-bottom-color:var(--blue)} .tabs a:hover{text-decoration:none;color:var(--ink)}
+.wrap{padding:4px 24px 32px;max-width:1500px}
+.sec{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#7a88a6;margin:18px 0 8px;font-weight:700}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0;align-items:center}
+select,input[type=text],input[type=number],input[type=email],textarea{font:inherit;border:1px solid #c9d1e2;border-radius:6px;padding:5px 8px;background:#fff;color:var(--ink)}
+textarea{width:100%;min-height:54px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.tile .n{font-size:26px;font-weight:700} .tile .l{color:var(--mut)}
+.n.r{color:var(--red)} .n.o{color:#c27a00} .n.b{color:var(--blue)} .n.p{color:var(--purple)} .n.g{color:var(--green)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th{text-align:left;font-size:11px;color:#7a88a6;font-weight:700;padding:6px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:7px 6px;border-bottom:1px solid #eef1f6;vertical-align:top}
+td.n{text-align:right;white-space:nowrap} td.rs{min-width:240px;max-width:340px;color:#3b4a6b}
+tr.exc td{background:#f6f1ff}
+.chip{display:inline-block;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600;margin:1px 2px 1px 0;white-space:nowrap}
+.hd{background:#e3edfd;color:var(--blue)} .so{background:#fde4e1;color:var(--red)} .ov{background:#fdf0d8;color:var(--amber)}
+.ok{background:#e3f4ea;color:var(--green)} .warn{background:#fff3cd;color:#8a6500} .ex{background:#efe8fd;color:var(--purple)}
+.st{font-size:11px;font-weight:700;white-space:nowrap}
+.st.awaiting_gate1{color:var(--purple)} .st.awaiting_gate2{color:var(--teal)} .st.approved,.st.po_recorded{color:var(--green)}
+.st.overridden{color:var(--red)} .st.no_action{color:#97a1b8;font-weight:400}
+.mut{color:#97a1b8} .small{font-size:12px;color:var(--mut)}
+.btn{display:inline-block;border:0;background:var(--blue);color:#fff;border-radius:6px;padding:6px 12px;font:inherit;font-weight:600;cursor:pointer}
+.btn.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue)} .btn.red{background:#fff;color:var(--red);border:1px solid var(--red)}
+.ai{background:#f6f1ff;border-left:4px solid var(--purple);padding:8px 10px;border-radius:4px;margin:8px 0}
+.ai b{color:var(--purple)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:14px}
+.flash{padding:10px 14px;border-radius:6px;margin:12px 0;font-weight:600}
+.flash.ok{background:#e3f4ea;color:#1e6b41} .flash.err{background:#fde4e1;color:#8a1f12}
+form.inline{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.trace li{margin:3px 0}
+@media (max-width:700px){.wrap,.top,.tabs,.banner{padding-left:16px;padding-right:16px}.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div>
+    <h1>Freshroots · Demand Planning</h1>
+    <div class="meta">
+      {% if run %}Run {{ run.run_id }} · {{ run.run_as_of|ist }} · stock as of {{ run.data_as_of }} · data age {{ run.data_age_hours|fmt1 }} h (limit 48 h){% else %}No completed run yet{% endif %}
+      {% if run and run.festival_month %} · <b>Festival month: +{{ ((run.uplift - 1) * 100)|round|int }}% uplift applied</b>{% endif %}
+    </div>
+  </div>
+  {% if user %}<div class="who">{{ user.name }} · {{ user.role_label }}<br><a href="/logout">Sign out</a></div>{% endif %}
+</div>
+{% if latest and latest.status != 'ok' %}
+<div class="banner stop">LAST RUN STOPPED ({{ latest.status|replace('_', ' ') }}) at {{ latest.run_as_of|ist }}: {{ latest.status_detail }}{% if run %} Showing the previous good run {{ run.run_id }}, which is older.{% endif %}</div>
+{% endif %}
+{% if run and run.shadow_mode %}
+<div class="banner shadow">SHADOW MODE · Recommendations run alongside Raghav's manual forecast. Nobody orders from them yet; decisions are logged as shadow.</div>
+{% endif %}
+{% if run and run.zoho_status and run.zoho_status != 'ok' %}
+<div class="banner warn">Open POs from Zoho: {{ run.zoho_status|replace('_', ' ') }}. Weeks of cover use on-hand stock only for this run.</div>
+{% endif %}
+<nav class="tabs">
+  {% set q = '?run=' ~ run.run_id if run and run_param else '' %}
+  <a href="/{{ q }}" class="{{ 'on' if tab == 'summary' }}">1 · Run summary &amp; action list</a>
+  <a href="/exceptions{{ q }}" class="{{ 'on' if tab == 'exceptions' }}">2 · Exception queue (Gate 1)</a>
+  <a href="/procurement{{ q }}" class="{{ 'on' if tab == 'procurement' }}">3 · Procurement review (Gate 2)</a>
+  <a href="/sku/{{ sku_id or 'SKU001' }}{{ q }}" class="{{ 'on' if tab == 'sku' }}">4 · SKU detail</a>
+  <a href="/impact" class="{{ 'on' if tab == 'impact' }}">5 · Impact &amp; rule review</a>
+  {% if user and user.role in ('raghav', 'it') %}<a href="/admin" class="{{ 'on' if tab == 'admin' }}">Exports &amp; runs</a>{% endif %}
+</nav>
+<div class="wrap">
+{% if flash %}<div class="flash {{ flash_kind or 'ok' }}">{{ flash }}</div>{% endif %}
+{% block body %}{% endblock %}
+</div>
+</body>
+</html>

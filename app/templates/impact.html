@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Impact &amp; rule review{% endblock %}
+{% block body %}
+{% set s = impact.stats %}{% set o = impact.totals %}{% set c = impact.counts %}
+<div class="sec">Impact &amp; rule review · Deepa · quarterly rule review</div>
+<div class="tiles">
+  <div class="tile"><div class="n">{{ s.accepted|rate(s.all_decisions) }}</div><div class="l">Acceptance rate · {{ s.all_decisions }} decisions</div></div>
+  <div class="tile"><div class="n {{ 'r' if s.all_decisions and s.overridden / s.all_decisions > 0.2 }}">{{ s.overridden|rate(s.all_decisions) }}</div><div class="l">Override rate · every override has a reason</div></div>
+  <div class="tile"><div class="n r">{{ o.stockout_incidents }}</div><div class="l">Stockout incidents logged</div></div>
+  <div class="tile"><div class="n o">{{ o.units_written_off|num }}</div><div class="l">Units written off (overstock)</div></div>
+  <div class="tile"><div class="n">{{ c.ok_runs }}</div><div class="l">Completed runs · {{ c.shadow_runs }} in shadow mode</div></div>
+  <div class="tile"><div class="n">{{ c.stopped_runs }}</div><div class="l">Runs stopped (stale data, unsigned rules, errors)</div></div>
+</div>
+<div class="sec">Baseline from the case</div>
+<div class="tiles">
+  <div class="tile"><div class="n r">₹18–22L</div><div class="l">Stockout loss per quarter</div></div>
+  <div class="tile"><div class="n o">₹10–12L</div><div class="l">Overstock write-offs per quarter</div></div>
+  <div class="tile"><div class="n b" style="font-size:20px">Monthly → Mon + Thu</div><div class="l">Forecast cycle (was 2 working days a month)</div></div>
+</div>
+<p class="small">Outcomes are tracked in units: the SAP export has no price per SKU, so ₹ per SKU switches on only if a price column is added.</p>
+
+<div class="grid2">
+<div class="card">
+  <b>Kill criteria</b> <span class="chip warn">Draft · Deepa to confirm</span>
+  <ol class="small">
+    <li>After shadow mode, an override rate above <b>20%</b> means the rules don't match Raghav's judgment. Stop and rework. (Raghav estimates the rules cover 80–85% of decisions.) Now: <b>{{ s.overridden|rate(s.all_decisions) }}</b>.</li>
+    <li>By <b>day 90</b>, stockout and write-off units not below the shadow-period level means the approach needs rethinking.</li>
+  </ol>
+  <b>Most overridden SKUs</b>
+  <ul class="small">{% for r in impact.most_overridden %}<li><a href="/sku/{{ r.sku_id }}">{{ r.sku_id }}</a> · {{ r.n }} change/override{{ 's' if r.n != 1 }}</li>{% else %}<li class="mut">None yet.</li>{% endfor %}</ul>
+</div>
+<div class="card">
+  <b>Log a write-off</b> <span class="small">(map step 13)</span>
+  {% if can_log %}
+  <form method="post" action="/outcomes" class="inline" style="margin-top:8px">
+    <select name="sku_id" aria-label="SKU">{% for s2 in all_skus %}<option value="{{ s2.sku_id }}">{{ s2.sku_id }} · {{ s2.sku_name|replace('Freshroots ', '') }}</option>{% endfor %}</select>
+    <input type="text" name="iso_week" placeholder="2026-W43" pattern="\d{4}-W\d{2}" required aria-label="ISO week" style="width:100px">
+    <input type="number" name="units" min="1" placeholder="Units" required aria-label="Units" style="width:90px">
+    <input type="text" name="note" placeholder="Note (optional)" aria-label="Note" style="flex:1;min-width:160px">
+    <button class="btn" type="submit">Log</button>
+  </form>
+  {% else %}<p class="small">Raghav or procurement can log write-offs.</p>{% endif %}
+  <table style="margin-top:10px">
+    <tr><th>When</th><th>SKU</th><th>Week</th><th>Event</th><th class="n">Units</th><th>By</th></tr>
+    {% for e in impact.outcomes %}<tr><td class="small">{{ e.logged_at|ist }}</td><td>{{ e.sku_id }}</td><td>{{ e.iso_week }}</td><td>{{ e.event|replace('_', '-') }}</td><td class="n">{{ e.units }}</td><td class="small">{{ e.logged_by }}</td></tr>
+    {% else %}<tr><td colspan="6" class="mut">Nothing logged yet.</td></tr>{% endfor %}
+  </table>
+</div>
+</div>
+{% endblock %}

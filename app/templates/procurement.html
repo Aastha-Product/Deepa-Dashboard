@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Procurement review{% endblock %}
+{% block body %}
+<div class="sec">Procurement review · Human gate 2 (Procurement checks quantities, then raises POs in Zoho by hand)</div>
+<div class="card scroll"><table>
+  <tr><th>SKU</th><th>Item</th><th>Linked distributor</th><th>Action</th><th class="n">Qty</th><th class="n">Cover after</th><th>Check</th><th>Status</th><th></th></tr>
+  {% for l in lines %}
+  <tr>
+    <td><a href="/sku/{{ l.sku_id }}?run={{ run.run_id }}"><b>{{ l.sku_id }}</b></a></td>
+    <td>{{ l.sku_name|replace('Freshroots ', '') }}</td><td>{{ l.distributor_name }}</td>
+    <td>{{ 'Pause next order' if l.action == 'pause' else 'Reorder' }}</td>
+    <td class="n"><b>{{ l.final_qty if l.action != 'pause' else '—' }}</b>{% if l.gate1_qty is not none and l.gate1_qty != l.qty %} <span class="mut">(was {{ l.qty }})</span>{% endif %}</td>
+    <td class="n">{% if l.cover_after is not none %}{{ l.cover_after|fmtw }} w{% else %}<span class="mut">—</span>{% endif %}</td>
+    <td>{% if l.line_status == 'awaiting_gate1' %}<span class="st awaiting_gate1">Waiting on Gate 1</span>{% elif l.qty_basis == 'topup' %}<span class="chip warn">Topped up</span>{% elif l.gate1_decision %}<span class="small">Gate 1: {{ l.gate1_decision }}</span>{% else %}<span class="small">Ready to review</span>{% endif %}</td>
+    <td>{{ m.status(l) }}{% if l.po_number %} <span class="small">{{ l.po_number }}</span>{% endif %}</td>
+    <td>
+      {% if can_decide and l.line_status == 'awaiting_gate2' %}
+      <form method="post" action="/decide" class="inline">
+        <input type="hidden" name="run_id" value="{{ run.run_id }}"><input type="hidden" name="sku_id" value="{{ l.sku_id }}"><input type="hidden" name="gate" value="2">
+        <select name="decision" aria-label="Decision"><option value="approve">Approve</option>{% if l.action != 'pause' %}<option value="change">Change qty</option>{% endif %}</select>
+        {% if l.action != 'pause' %}<input type="number" name="final_qty" min="0" placeholder="Qty" aria-label="Quantity" style="width:80px">{% endif %}
+        <input type="text" name="reason" placeholder="Reason if changed" aria-label="Reason" style="width:180px">
+        <button class="btn" type="submit">Save</button>
+      </form>
+      {% elif l.gate2_decision %}<span class="small">{{ l.gate2_by }} · {{ l.gate2_at|ist }}</span>{% endif %}
+    </td>
+  </tr>
+  {% else %}<tr><td colspan="9" class="mut">No reorder or pause lines in this run.</td></tr>{% endfor %}
+</table>
+<p class="small">Lines are listed by SKU. There's no automatic PO: approving here records the decision, and procurement raises the PO in Zoho. The next run reads open POs back from Zoho and marks matching lines “PO recorded”.</p>
+</div>
+{% if not can_decide %}<p class="small">Only the procurement team can record Gate 2 decisions.</p>{% endif %}
+{% endblock %}
