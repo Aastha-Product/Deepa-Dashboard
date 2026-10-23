@@ -4,26 +4,26 @@
 {% block body %}
 {% set s = impact.stats %}{% set o = impact.totals %}{% set c = impact.counts %}
 
-<div class="sec"><h2><span class="hi">{{ mm.icon('shield', 17) }}</span>Rules sign-off <small>map step 0: you sign off Raghav's rules before any run uses them</small></h2></div>
+<div class="sec"><h2><span class="hi">{{ mm.icon('shield', 17) }}</span>Rules sign-off <small>map step 0: Deepa Nair signs off your rules before any run uses them</small></h2></div>
 <div class="card" style="border-left:4px solid {{ 'var(--brand-500)' if version and version.signed_off_by else 'var(--red)' }}">
   {% if version and version.signed_off_by %}
     <span class="chip done">Signed off</span> Rules version <b>{{ version.version_id }}</b>, signed off by {{ version.signed_off_by }} on {{ version.signed_off_at|ist }}. Runs use it.
   {% else %}
-    <span class="chip stop">Not signed off</span> {% if version %}Version <b>{{ version.version_id }}</b> is loaded but{% else %}The current rules{% endif %} {{ 'is' if version else 'are' }} not signed off. <b>Runs stop until you sign off.</b>
+    <span class="chip stop">Not signed off</span> {% if version %}Version <b>{{ version.version_id }}</b> is loaded but{% else %}The current rules{% endif %} {{ 'is' if version else 'are' }} not signed off. <b>Runs stop until Deepa Nair signs off.</b>
   {% endif %}
   <details style="margin-top:10px"><summary class="small">The rules and numbers{{ ' being signed off' if not (version and version.signed_off_by) }}</summary>
     <table class="small" style="margin-top:6px">
       <tr><td>High demand</td><td>last {{ ts.values['rules.high_demand.short_window_weeks'] }} weeks more than {{ ts.values['rules.high_demand.threshold_pct'] }}% above the {{ ts.values['rules.high_demand.long_window_weeks'] }}-week average → reorder {{ ts.values['rules.high_demand.reorder_multiplier'] }} &times; standard</td></tr>
       <tr><td>Stockout / overstock</td><td>below {{ ts.values['rules.cover_windows.standard.min_weeks'] }} / above {{ ts.values['rules.cover_windows.standard.max_weeks'] }} weeks of cover; high perishability {{ ts.values['rules.cover_windows.high_perishability.min_weeks'] }}–{{ ts.values['rules.cover_windows.high_perishability.max_weeks'] }} weeks</td></tr>
       <tr><td>Festival months</td><td>March, October, November: +{{ ts.values['rules.festival.uplift_pct'] }}% demand before any threshold check</td></tr>
-      <tr><td>Added rule A</td><td>stockout quantity topped up to the minimum cover, never above the maximum (pending Raghav's confirmation)</td></tr>
+      <tr><td>Added rule A</td><td>stockout quantity topped up to the minimum cover, never above the maximum (pending your confirmation)</td></tr>
       <tr><td>Added rules B–C</td><td>exceptions come to you; a run stops if data is over {{ ts.values['data_checks.stale_after_hours'] }} h old</td></tr>
       <tr><td>Written by</td><td>{{ ts.written_by }} · content hash {{ ts.content_hash[:12] }}</td></tr>
     </table>
   </details>
   {% if not (version and version.signed_off_by) %}
-  <form method="post" action="/thresholds/sign" style="margin-top:12px"><input type="hidden" name="content_hash" value="{{ ts.content_hash }}">
-    <button class="btn" type="submit">{{ mm.icon('shield', 16) }}Sign off these rules as {{ signer }}</button></form>
+  <p class="small" style="margin-top:12px">{{ mm.icon('shield', 15) }} The rules are yours, so the sign-off is {{ signer }}'s, not yours:
+    she runs <code>python -m job.thresholds sign</code>. Tell her when a new version is ready.</p>
   {% endif %}
 </div>
 
@@ -32,14 +32,14 @@
 <div class="card scroll" style="padding:6px 10px">
 <table>
   <tr><th>Rule</th><th>Logic</th><th>Source</th></tr>
-  <tr><td><b>Festival uplift</b></td><td>+{{ v['rules.festival.uplift_pct'] }}% demand before any check, in festival months from the calendar file</td><td><span class="chip done">Raghav's rule 4</span></td></tr>
+  <tr><td><b>Festival uplift</b></td><td>+{{ v['rules.festival.uplift_pct'] }}% demand before any check, in festival months from the calendar file</td><td><span class="chip done">Your rule 4</span></td></tr>
   <tr><td><b>Weeks of cover</b></td><td>(on hand + open Zoho POs) ÷ weekly demand; on hand only while Zoho isn't connected</td><td><span class="chip hd">Components map</span></td></tr>
-  <tr><td><b>High demand</b></td><td>last {{ v['rules.high_demand.short_window_weeks'] }} weeks more than {{ v['rules.high_demand.threshold_pct'] }}% above the {{ v['rules.high_demand.long_window_weeks'] }}-week average → next order {{ v['rules.high_demand.reorder_multiplier'] }} &times; standard</td><td><span class="chip done">Raghav's rule 1</span></td></tr>
-  <tr><td><b>Stockout risk</b></td><td>cover below {{ v['rules.cover_windows.standard.min_weeks'] }} weeks (perishable {{ v['rules.cover_windows.high_perishability.min_weeks'] }}) → reorder now</td><td><span class="chip done">Raghav's rules 2, 5</span></td></tr>
-  <tr><td><b>Overstock risk</b></td><td>cover above {{ v['rules.cover_windows.standard.max_weeks'] }} weeks (perishable {{ v['rules.cover_windows.high_perishability.max_weeks'] }}) → pause the next order</td><td><span class="chip done">Raghav's rules 3, 5</span></td></tr>
-  <tr><td><b>Stockout reorder size</b></td><td>standard (1.5 &times; if high demand), topped up to the minimum cover, never above the maximum</td><td><span class="chip warn">Added rule A · Raghav to confirm</span></td></tr>
-  <tr><td><b>Exceptions</b></td><td>cases the rules can't settle get no final number until you decide them</td><td><span class="chip warn">Added rule B · Raghav to confirm</span></td></tr>
-  <tr><td><b>Stale data</b></td><td>an export over {{ v['data_checks.stale_after_hours'] }} h old stops the run; no recommendations, IT is alerted</td><td><span class="chip warn">Added rule C · Raghav to confirm</span></td></tr>
+  <tr><td><b>High demand</b></td><td>last {{ v['rules.high_demand.short_window_weeks'] }} weeks more than {{ v['rules.high_demand.threshold_pct'] }}% above the {{ v['rules.high_demand.long_window_weeks'] }}-week average → next order {{ v['rules.high_demand.reorder_multiplier'] }} &times; standard</td><td><span class="chip done">Your rule 1</span></td></tr>
+  <tr><td><b>Stockout risk</b></td><td>cover below {{ v['rules.cover_windows.standard.min_weeks'] }} weeks (perishable {{ v['rules.cover_windows.high_perishability.min_weeks'] }}) → reorder now</td><td><span class="chip done">Your rules 2, 5</span></td></tr>
+  <tr><td><b>Overstock risk</b></td><td>cover above {{ v['rules.cover_windows.standard.max_weeks'] }} weeks (perishable {{ v['rules.cover_windows.high_perishability.max_weeks'] }}) → pause the next order</td><td><span class="chip done">Your rules 3, 5</span></td></tr>
+  <tr><td><b>Stockout reorder size</b></td><td>standard (1.5 &times; if high demand), topped up to the minimum cover, never above the maximum</td><td><span class="chip warn">Added rule A · yours to confirm</span></td></tr>
+  <tr><td><b>Exceptions</b></td><td>cases the rules can't settle get no final number until you decide them</td><td><span class="chip warn">Added rule B · yours to confirm</span></td></tr>
+  <tr><td><b>Stale data</b></td><td>an export over {{ v['data_checks.stale_after_hours'] }} h old stops the run; no recommendations, IT is alerted</td><td><span class="chip warn">Added rule C · yours to confirm</span></td></tr>
 </table></div>
 
 {% set exc = lines|selectattr('exception_type')|list %}
@@ -61,8 +61,8 @@
 <div class="card scroll" style="padding:6px 10px">
 <table>
   <tr><th>Who</th><th>Role here</th><th>Responsible for</th></tr>
-  <tr><td><b>Deepa Nair</b> <span class="small">Head of Operations</span></td><td>Sponsor and decider</td><td>The 90-day result; signs off the rules, decides exceptions and approves every reorder and pause in this dashboard, twice a week</td></tr>
-  <tr><td><b>Raghav Kulkarni</b> <span class="small">Senior Demand Planner</span></td><td>Rules owner</td><td>The five forecasting rules; confirms added rules A–C. Any change to a threshold makes a new version that needs sign-off</td></tr>
+  <tr><td><b>Raghav Kulkarni</b> <span class="small">Senior Demand Planner · you</span></td><td>Rules owner and decider</td><td>The five forecasting rules and added rules A–C; decides exceptions and approves every reorder and pause in this dashboard, twice a week</td></tr>
+  <tr><td><b>Deepa Nair</b> <span class="small">Head of Operations</span></td><td>Sponsor</td><td>The 90-day result; signs off the rules before any run uses them. Any change to a threshold makes a new version that needs her sign-off</td></tr>
   <tr><td><b>Procurement</b></td><td>Action owner</td><td>Raises the approved reorders as POs in Zoho, from the CSV export</td></tr>
   <tr><td><b>IT</b></td><td>Data owner</td><td>The SAP export before each Mon + Thu 06:00 run; alerted when a run stops on data over {{ v['data_checks.stale_after_hours'] }} h old</td></tr>
 </table></div>
@@ -85,7 +85,7 @@
 <div class="card">
   <h3>{{ mm.icon('alert', 17) }}Kill criteria <span class="chip warn">Draft, yours to confirm</span></h3>
   <ol class="small">
-    <li>After shadow mode, if more than <b>20%</b> of recommendations are changed or overridden, the rules don't match Raghav's judgment: stop and rework. (Raghav estimates they cover 80–85%.) Now: <b>{{ s.overridden|rate(s.all_decisions) }}</b>.</li>
+    <li>After shadow mode, if more than <b>20%</b> of recommendations are changed or overridden, the rules don't match your judgment: stop and rework. (You estimate they cover 80–85%.) Now: <b>{{ s.overridden|rate(s.all_decisions) }}</b>.</li>
     <li>By <b>day 90</b>, if stockout and write-off units aren't below the shadow-period level, rethink the approach.</li>
   </ol>
   <h3 style="margin-top:12px">Most changed SKUs</h3>

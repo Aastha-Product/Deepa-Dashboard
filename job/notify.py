@@ -1,7 +1,7 @@
 """Summary email after a good run, alert after a stopped or failed one (map step 9).
 
 Email is best-effort: if SMTP isn't configured or sending fails, the run result is unchanged and the
-dashboard still shows everything. Recipients come from MAIL_TO_SUMMARY (Deepa, plus anyone else she wants informed)
+dashboard still shows everything. Recipients come from MAIL_TO_SUMMARY (Raghav, plus anyone else he wants informed)
 and MAIL_TO_IT_ALERT (IT), comma-separated.
 """
 import html

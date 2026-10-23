@@ -1,6 +1,6 @@
-"""FastAPI app on Vercel: the cron endpoint (map step 2) and Deepa's dashboard (steps 9-13).
+"""FastAPI app on Vercel: the cron endpoint (map step 2) and Raghav's dashboard (steps 9-13).
 
-Deepa Nair (Head of Operations) checks the dashboard after each Mon + Thu run. She decides the exceptions
+Raghav Kulkarni (Senior Demand Planner) checks the dashboard after each Mon + Thu run. He decides the exceptions
 (Gate 1), approves the reorder and pause lines (Gate 2), signs off the rules and logs write-offs.
 """
 import csv
@@ -129,7 +129,7 @@ def _flagged(l):
 
 
 def _changes(lines, prev_lines):
-    """What changed since the previous run, for Deepa's twice-weekly check."""
+    """What changed since the previous run, for Raghav's twice-weekly check."""
     if prev_lines is None:
         return None
     before = {l["sku_id"]: _flagged(l) for l in prev_lines}
@@ -270,7 +270,7 @@ def scheduled_run(authorization: str | None = Header(default=None)):
     return summary.as_dict()
 
 
-# --- Deepa's pages ----------------------------------------------------------------------------
+# --- Raghav's pages ---------------------------------------------------------------------------
 
 FILTERS = {"all": "All SKUs", "action": "Needs action", "stockout": "Stockout risk", "overstock": "Overstock risk",
            "ok": "OK"}
@@ -405,7 +405,7 @@ def sign_thresholds(content_hash: str = Form(...)):
     return _back("/impact", f"Rules version {version_id} signed off. The next run will use it.")
 
 
-# --- decisions: Gate 1 (exceptions) and Gate 2 (approvals), both by Deepa ---------------------
+# --- decisions: Gate 1 (exceptions) and Gate 2 (approvals), both by Raghav --------------------
 
 @app.post("/decide")
 def decide(run_id: int = Form(...), sku_id: str = Form(...), gate: int = Form(...), decision: str = Form(...),
@@ -435,7 +435,7 @@ def decide(run_id: int = Form(...), sku_id: str = Form(...), gate: int = Form(..
             qty = line["final_qty"] if gate == 2 else line["qty"]
         queries.record_decision(conn, run_id=run_id, sku_id=sku_id, gate=gate, decided_by=user.email,
                                 decision=decision, final_qty=qty, reason=reason, shadow=run["shadow_mode"])
-        # Deepa decides both gates, so accepting or changing an exception also approves its line.
+        # Raghav decides both gates, so accepting or changing an exception also approves its line.
         # Nothing to approve when the outcome orders nothing (an override, or a qty of 0 on a reorder).
         also_approved = gate == 1 and decision in ("accept", "change") and (qty > 0 or line["action"] == "pause")
         if also_approved:
@@ -581,7 +581,7 @@ def run_now(replay_as_of: str = Form("")):
             return _back("/admin", "Replay time must look like 2026-10-19T06:00.", "err")
         clock = clock if clock.tzinfo else clock.replace(tzinfo=ingest.IST)
     with db.connect() as conn:
-        s = job_run.execute_and_notify(conn, triggered_by="manual: Deepa Nair" + (" (replay)" if clock else ""),
+        s = job_run.execute_and_notify(conn, triggered_by="manual: Raghav Kulkarni" + (" (replay)" if clock else ""),
                                        run_as_of=clock)
     if s.status == "ok":
         return _back("/", f"Run {s.run_id} finished: {s.counts.get('exceptions', 0)} exception(s) and "

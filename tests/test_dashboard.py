@@ -96,7 +96,7 @@ def app_client(monkeypatch):
     monkeypatch.setattr(queries, "decision_log", lambda conn: [
         {"decided_at": RUN_AS_OF, "run_id": 1, "run_as_of": RUN_AS_OF, "sku_id": "SKU001", "sku_name": "Freshroots Mango Drink 200ml",
          "gate": 1, "decision": "change", "final_qty": 600, "reason": "festival stock already on the way",
-         "decided_by": "Deepa Nair (dashboard)", "shadow": True}])
+         "decided_by": "Raghav Kulkarni (dashboard)", "shadow": True}])
     monkeypatch.setattr(queries, "record_zoho_export", lambda conn, **kw: recorded.append(("zoho_export", kw)))
     monkeypatch.setattr(main.thresholds, "load", lambda conn, ts: (3, True))
     monkeypatch.setattr(main.thresholds, "sign", lambda conn, v, by, actor=None: recorded.append(("sign", v, by, actor)))
@@ -113,7 +113,7 @@ def rows_in(html):
 
 def test_overview_is_deepas_and_has_no_role_picker(app_client):
     html = app_client.get("/").text
-    assert "Deepa Nair, Head of Operations" in html and "Acting as" not in html
+    assert "Raghav Kulkarni, Senior Demand Planner" in html and "Acting as" not in html
     assert app_client.post("/role", data={"role": "raghav"}).status_code in (404, 405)
     assert app_client.get("/login").status_code == 404
 
@@ -180,8 +180,8 @@ def test_gate1_change_needs_reason_and_qty(app_client):
     assert "kind=ok" in r.headers["location"]
     kind, kw = app_client.recorded[0]
     assert kind == "decision" and kw["final_qty"] == 600 and kw["gate"] == 1 and kw["shadow"] is True
-    assert kw["decided_by"] == "Deepa Nair (dashboard)"
-    assert app_client.recorded[1][1]["gate"] == 2 and app_client.recorded[1][1]["decided_by"] == "Deepa Nair (dashboard)"
+    assert kw["decided_by"] == "Raghav Kulkarni (dashboard)"
+    assert app_client.recorded[1][1]["gate"] == 2 and app_client.recorded[1][1]["decided_by"] == "Raghav Kulkarni (dashboard)"
 
 
 def decisions_made(client):
@@ -250,7 +250,8 @@ def test_sku_page_draws_chart_and_cover_bar(app_client):
 
 def test_sign_off(app_client):
     html = app_client.get("/impact").text
-    assert "Not signed off" in html and "Runs stop until you sign off" in html
+    assert "Not signed off" in html and "Runs stop until Deepa Nair signs off" in html
+    assert "python -m job.thresholds sign" in html and "Sign off these rules as" not in html   # not Raghav's to sign
     h = main.thresholds.read().content_hash
     r = app_client.post("/thresholds/sign", data={"content_hash": h})
     assert "kind=ok" in r.headers["location"]
@@ -272,7 +273,7 @@ def test_write_off_validation(app_client):
     assert "kind=err" in r.headers["location"]
     r = app_client.post("/outcomes", data={"sku_id": "SKU007", "iso_week": "2026-W43", "units": 5})
     assert "kind=ok" in r.headers["location"] and app_client.recorded[0][0] == "write_off"
-    assert app_client.recorded[0][1]["logged_by"] == "Deepa Nair (dashboard)"
+    assert app_client.recorded[0][1]["logged_by"] == "Raghav Kulkarni (dashboard)"
 
 
 def test_data_and_runs_page(app_client):
@@ -305,7 +306,7 @@ def test_overview_headline_and_progress(app_client):
 
 
 def approved(skus):
-    return [{**l, "line_status": "approved", "gate2_decision": "approve", "gate2_at": RUN_AS_OF, "gate2_by": "Deepa Nair (dashboard)"}
+    return [{**l, "line_status": "approved", "gate2_decision": "approve", "gate2_at": RUN_AS_OF, "gate2_by": "Raghav Kulkarni (dashboard)"}
             if l["sku_id"] in skus else l for l in LINES]
 
 
@@ -339,7 +340,7 @@ def test_zoho_export_csv(app_client, monkeypatch):
     assert rows[0].startswith("SKU,Item Name,Quantity")
     assert len(rows) == 3 and any(row.startswith("SKU013,Freshroots Peanut Butter 300g,161,") for row in rows)
     assert not any(row.startswith("SKU006") for row in rows)          # a pause isn't a PO
-    assert ("zoho_export", {"run_id": 1, "lines": 2, "units": 470, "exported_by": "Deepa Nair (dashboard)"}) in app_client.recorded
+    assert ("zoho_export", {"run_id": 1, "lines": 2, "units": 470, "exported_by": "Raghav Kulkarni (dashboard)"}) in app_client.recorded
 
 
 def test_pipeline_strip_and_briefing(app_client):
@@ -408,7 +409,7 @@ def test_decision_log_csv(app_client):
 
 def test_rules_routing_and_owners_tables(app_client):
     html = app_client.get("/impact").text
-    assert "Raghav's rule 4" in html and "Added rule A · Raghav to confirm" in html
+    assert "Your rule 4" in html and "Added rule A · yours to confirm" in html
     assert "Order would leave stock above the maximum" in html and "Raghav Kulkarni" in html and "Action owner" in html
 
 

@@ -88,7 +88,7 @@ def evaluate(s: SkuInput, run_date: date, t: dict) -> Recommendation:
                          None, lo, hi)
 
     if len(weeks) < t["exceptions.new_sku_min_history_weeks"]:
-        rec.action, rec.exception_type = "review", "new_sku"    # not enough history: a judgment call for Deepa
+        rec.action, rec.exception_type = "review", "new_sku"    # not enough history: a judgment call for Raghav
         return rec
 
     window = weeks[-long_n:]

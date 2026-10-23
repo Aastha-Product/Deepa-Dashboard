@@ -222,13 +222,13 @@ h3.grp{display:flex;align-items:center;gap:8px;margin:16px 0 10px;font-size:14px
 </header>
 <div class="banners">
   {% if latest and latest.status != 'ok' %}<div class="banner stop">{{ mm.icon('x-circle', 17) }}<b>Last run stopped</b> {{ latest.run_as_of|ist }}: {{ latest.status_detail }}{% if run %} Showing run {{ run.run_id }}, the last good one.{% endif %}</div>{% endif %}
-  {% if run and run.shadow_mode %}<div class="banner shadow">{{ mm.icon('eye', 17) }}<b>Shadow mode</b> Recommendations run alongside Raghav's manual forecast. Your decisions are logged, but nothing is ordered from them yet.</div>{% endif %}
+  {% if run and run.shadow_mode %}<div class="banner shadow">{{ mm.icon('eye', 17) }}<b>Shadow mode</b> Recommendations run alongside your manual forecast. Your decisions are logged, but nothing is ordered from them yet.</div>{% endif %}
   {% if run and run.zoho_status and run.zoho_status != 'ok' %}<div class="banner warn">{{ mm.icon('info', 17) }}<b>Open POs unknown</b> Zoho is {{ run.zoho_status|replace('_', ' ') }}, so weeks of cover use on-hand stock only.</div>{% endif %}
 </div>
 <main class="wrap">
 {% if flash %}<div class="flash {{ flash_kind or 'ok' }}">{{ mm.icon('check' if (flash_kind or 'ok') == 'ok' else 'alert', 18) }}{{ flash }}</div>{% endif %}
 {% block body %}{% endblock %}
 </main>
-<footer>{{ mm.icon('leaf', 15) }}<span>Every number comes from Raghav's signed-off rules, computed in code. Reasons explain them and never set a quantity. No purchase order is ever created automatically: approved reorders are raised in Zoho by hand.</span></footer>
+<footer>{{ mm.icon('leaf', 15) }}<span>Every number comes from your forecasting rules, signed off by Deepa Nair and computed in code. Reasons explain them and never set a quantity. No purchase order is ever created automatically: approved reorders are raised in Zoho by hand.</span></footer>
 </body>
 </html>
