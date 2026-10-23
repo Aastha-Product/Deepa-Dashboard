@@ -178,10 +178,14 @@ def test_gate1_accept_uses_rules_qty(app_client, monkeypatch):
     assert app_client.recorded[0][1]["final_qty"] == 750
 
 
-def test_gate2_by_wrong_role_is_forbidden(app_client, monkeypatch):
+def test_gate2_by_wrong_role_goes_back_with_message(app_client, monkeypatch):
     as_user(app_client, "raghav")
-    r = app_client.post("/decide", data={"run_id": 1, "sku_id": "SKU013", "gate": 2, "decision": "approve"})
-    assert r.status_code == 403 and app_client.recorded == []
+    r = app_client.post("/decide", data={"run_id": 1, "sku_id": "SKU013", "gate": 2, "decision": "approve"},
+                        headers={"referer": "http://testserver/procurement?run=1"})
+    assert r.status_code == 303 and app_client.recorded == []
+    loc = r.headers["location"]
+    assert loc.startswith("http://testserver/procurement?run=1&") and "kind=err" in loc
+    assert "Switch+to+Procurement+team" in loc
 
 
 def test_gate2_approve(app_client, monkeypatch):
@@ -209,7 +213,8 @@ def test_sign_off_only_for_deepa(app_client, monkeypatch):
     html = app_client.get("/impact").text
     assert "Not signed off" in html and "Runs stop until Deepa Nair signs it off" in html and "Sign off these rules" not in html
     h = main.thresholds.read().content_hash
-    assert app_client.post("/thresholds/sign", data={"content_hash": h}).status_code == 403
+    r = app_client.post("/thresholds/sign", data={"content_hash": h})
+    assert r.status_code == 303 and "kind=err" in r.headers["location"] and app_client.recorded == []
     as_user(app_client, "deepa")
     assert "Sign off these rules as Deepa Nair" in app_client.get("/impact").text
     r = app_client.post("/thresholds/sign", data={"content_hash": h})
@@ -225,6 +230,11 @@ def test_sign_off_refuses_stale_page(app_client, monkeypatch):
 
 def test_admin_only_for_raghav_and_it(app_client, monkeypatch):
     as_user(app_client, "deepa")
-    assert app_client.get("/admin").status_code == 403
+    r = app_client.get("/admin")
+    assert r.status_code == 403
+    # Not a bare error: the normal dashboard, the role picker and who can use the page
+    assert "Acting as" in r.text and "1 · Run summary" in r.text
+    assert "Deepa Nair can&#39;t use Exports &amp; runs. Switch to Raghav Kulkarni or IT team" in r.text
+    assert "Upload an SAP export" not in r.text
     as_user(app_client, "it")
     assert "Upload an SAP export" in app_client.get("/admin").text

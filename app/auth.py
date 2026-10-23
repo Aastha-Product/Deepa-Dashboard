@@ -54,6 +54,15 @@ def current_user(request: Request) -> User:
     return User(role if role in ROLES else DEFAULT_ROLE)
 
 
+class RoleDenied(HTTPException):
+    """The acting role can't do this; the app shows it inside the dashboard, not as a bare error."""
+
+    def __init__(self, user: User, allowed: set):
+        self.user = user
+        self.allowed = [ROLES[r][0] for r in ROLES if r in allowed]
+        super().__init__(status_code=403, detail=f"{user.name} can't do this. Switch role in the header.")
+
+
 def require(user: User, allowed: set) -> None:
     if user.role not in allowed:
-        raise HTTPException(status_code=403, detail=f"{user.name} can't do this. Switch role in the header.")
+        raise RoleDenied(user, allowed)

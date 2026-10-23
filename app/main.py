@@ -49,6 +49,31 @@ templates.env.filters.update(
 
 # --- helpers ----------------------------------------------------------------------------------
 
+PAGE_NAMES = {"/admin": "Exports & runs", "/decide": "recording a gate decision", "/outcomes": "logging a write-off",
+              "/thresholds/sign": "signing off the rules", "/admin/upload": "uploading an export",
+              "/admin/run": "starting a run"}
+
+
+@app.exception_handler(auth.RoleDenied)
+def _role_denied(request: Request, exc: auth.RoleDenied):
+    """Wrong role: show the normal dashboard with the role picker and say who can do it."""
+    what = PAGE_NAMES.get(request.url.path, "this")
+    who = " or ".join(exc.allowed)
+    msg = f"{exc.user.name} can't use {what}. Switch to {who} in the Acting as menu."
+    if request.method != "GET":
+        back = request.headers.get("referer") or "/"
+        sep = "&" if "?" in back else "?"
+        return RedirectResponse(f"{back}{sep}{urlencode({'msg': msg, 'kind': 'err'})}", status_code=303)
+    try:
+        with db.connect() as conn:
+            run, latest = queries.run(conn), queries.latest_run(conn)
+    except Exception:  # noqa: BLE001 - still show the page and the role picker
+        run = latest = None
+    return templates.TemplateResponse(request, "denied.html", {
+        "user": exc.user, "tab": None, "run": run, "latest": latest, "run_param": False,
+        "flash": msg, "flash_kind": "err", "allowed": exc.allowed}, status_code=403)
+
+
 def _page(request, name, conn, user, tab, run, **ctx):
     params = request.query_params
     return templates.TemplateResponse(request, name, {
