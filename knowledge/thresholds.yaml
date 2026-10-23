@@ -1,0 +1,42 @@
+# Single source for every number the rules engine uses.
+# Changing any value (or forecasting_rules.md) creates a new version that Deepa must sign off.
+
+written_by: Raghav Kulkarni, Senior Demand Planner
+sign_off_by: Deepa Nair, Head of Operations
+rules_file: forecasting_rules.md
+
+rules:
+  high_demand:
+    short_window_weeks: 4
+    long_window_weeks: 12
+    long_window_includes_short: true   # pending Raghav's confirmation
+    threshold_pct: 20
+    reorder_multiplier: 1.5
+
+  cover_windows:
+    standard:
+      min_weeks: 6
+      max_weeks: 14
+    high_perishability:
+      min_weeks: 3
+      max_weeks: 4
+
+  festival:
+    months: [3, 10, 11]
+    uplift_pct: 25
+    apply_before_threshold_checks: true
+
+  reorder_qty:                         # added rule A, pending Raghav's sign-off
+    base: standard_reorder_qty
+    top_up_to_min_cover: true
+    cap_at_max_cover: true
+
+exceptions:                            # added rule B
+  conflicting_flags: true
+  new_sku_min_history_weeks: 12
+  zero_demand: true
+  distributor_swing_pct: 30
+  distributor_swing_enabled: false     # needs distributor-level sales in the SAP export
+
+data_checks:                           # added rule C
+  stale_after_hours: 48

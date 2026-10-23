@@ -1,0 +1,35 @@
+import os
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+ENV_FILE = ROOT / ".env"
+
+
+def _load_env_file(path: Path) -> None:
+    """Read KEY=value lines from .env into the environment; real environment variables win."""
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.split(" #", 1)[0].strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if value.strip():
+            os.environ.setdefault(key.strip(), value.strip())
+
+
+_load_env_file(ENV_FILE)
+
+KNOWLEDGE_DIR = Path(os.environ.get("KNOWLEDGE_DIR", ROOT / "knowledge"))
+DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "data"))
+MIGRATIONS_DIR = ROOT / "supabase" / "migrations"
+
+THRESHOLDS_FILE = KNOWLEDGE_DIR / "thresholds.yaml"
+FESTIVAL_CALENDAR_CSV = DATA_DIR / "seed" / "festival_calendar.csv"
+
+
+def database_url() -> str:
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL is not set; add the Supabase pooler connection string to .env")
+    return url
