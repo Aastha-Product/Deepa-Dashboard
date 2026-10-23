@@ -40,6 +40,8 @@ copy .env.example .env        # then add the Supabase pooler connection string a
 ```
 
 ## Supabase + GitHub
+- **Project:** `Deepa-Dashboard` (ref `tjhulermfpkbanrwesmy`, region ap-southeast-2), in Aastha-Product's Org.
+- **Integration:** linked to this repo, working directory `.`, deploy to production from `main` (on since 23 Oct 2026).
 - **Schema changes:** a new file in `supabase/migrations/`, named `YYYYMMDDHHMMSS_name.sql`. Never edit a migration that has already been applied.
 - **GitHub integration:** in Supabase, go to Project Settings → Integrations → GitHub, choose this repo, set the Supabase directory to `supabase`, and turn on deploy to production for `main`. Migrations then apply on every merge to `main`.
 - **Secrets:** the job's database connection string and service role key go in `.env` (local) and Vercel environment variables. They never go in the repo.
