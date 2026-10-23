@@ -3,7 +3,7 @@
 {% block title %}{{ sku.sku_id }}{% endblock %}
 {% block body %}
 <div class="sec">
-  <h2>{{ sku.sku_id }} · {{ sku.sku_name|short }} <small>{{ sku.category }} · {{ sku.perishability }} perishability · {{ sku.distributor_name }}</small></h2>
+  <h2>{{ sku.sku_id }} · {{ sku.sku_name|short }} <small>{{ sku.category }} · {{ sku.perishability }} perishability · {{ m.distributor(sku) }}</small></h2>
   <form class="inline" method="get" onsubmit="location.href='/sku/'+this.sku.value+'{{ '?run=' ~ run.run_id if run and run_param else '' }}';return false">
     <select name="sku" aria-label="SKU">{% for s in all_skus %}<option value="{{ s.sku_id }}" {{ 'selected' if s.sku_id == sku.sku_id }}>{{ s.sku_id }} · {{ s.sku_name|short }}</option>{% endfor %}</select>
     <button class="btn ghost sm" type="submit">Show</button>

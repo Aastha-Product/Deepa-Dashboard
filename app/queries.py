@@ -87,7 +87,7 @@ def line(conn, run_id, sku_id):
 
 
 def sku(conn, sku_id):
-    return _one(conn, """SELECT m.*, d.distributor_name FROM sku_master m
+    return _one(conn, """SELECT m.*, d.distributor_name, d.hubspot_url AS distributor_hubspot_url FROM sku_master m
                          JOIN distributors d ON d.distributor_id = m.distributor_id WHERE m.sku_id = %s""", (sku_id,))
 
 

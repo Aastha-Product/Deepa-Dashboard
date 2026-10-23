@@ -56,6 +56,17 @@ def full(conn) -> list:
                        "" if ok else "Run tools/zoho_setup.py once and import zoho.vercel.env in Vercel. "
                                      "Until then, weeks of cover use on-hand stock only."))
 
+    try:
+        linked, total = conn.execute(
+            "SELECT count(hubspot_url), count(*) FROM distributors").fetchone()
+        items.append(_item("HubSpot (distributor companies)", OK if linked == total and total else MISSING,
+                           f"{linked} of {total} distributors linked to a HubSpot company",
+                           "" if linked == total and total else
+                           "Distributors are added to HubSpot from Claude's HubSpot connection; the links are then saved here."))
+    except Exception as exc:  # noqa: BLE001
+        items.append(_item("HubSpot (distributor companies)", ERROR, f"can't read links: {type(exc).__name__}",
+                           "The HubSpot migration may not have run yet."))
+
     if os.environ.get("ANTHROPIC_API_KEY"):
         items.append(_item("Claude (reasons)", OK, f"key set · model {os.environ.get('DP_CLAUDE_MODEL', 'claude-opus-5-5')}"))
     else:

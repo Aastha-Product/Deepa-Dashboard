@@ -1,3 +1,8 @@
+{% macro distributor(l) -%}
+  {%- if l.distributor_hubspot_url -%}<a href="{{ l.distributor_hubspot_url }}" target="_blank" rel="noopener" title="Open {{ l.distributor_name }} in HubSpot">{{ l.distributor_name }} ↗</a>
+  {%- else -%}{{ l.distributor_name }}{%- endif -%}
+{%- endmacro %}
+
 {% macro flags(l) -%}
   {%- if l.exception_type %}<span class="chip ex">{{ l.exception_type|replace('_', ' ')|capitalize }}</span>{% endif -%}
   {%- if l.flag_stockout %}<span class="chip so">Stockout risk</span>{% endif -%}

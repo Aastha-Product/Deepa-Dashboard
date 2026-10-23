@@ -12,7 +12,7 @@
 <div class="card" style="margin-bottom:12px;{{ 'border-left:4px solid #6a4bc4' if l.line_status == 'awaiting_gate1' }}">
   <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
     <div><a href="/sku/{{ l.sku_id }}?run={{ run.run_id }}"><h3>{{ l.sku_id }} · {{ l.sku_name|short }}</h3></a>
-      <span class="small">{{ l.category }} · {{ l.perishability }} perishability · {{ l.distributor_name }}</span></div>
+      <span class="small">{{ l.category }} · {{ l.perishability }} perishability · {{ m.distributor(l) }}</span></div>
     <div>{{ m.flags(l) }} {{ m.status(l) }}</div>
   </div>
   <div class="grid g2" style="margin-top:6px;gap:18px">
@@ -67,7 +67,7 @@
   <tr><th>SKU</th><th>Action</th><th class="n">Qty</th><th>Cover now → after</th><th>Check</th><th>Decide</th></tr>
   {% for l in approvals %}
   <tr>
-    <td><a href="/sku/{{ l.sku_id }}?run={{ run.run_id }}"><b>{{ l.sku_id }}</b></a> <span class="small">{{ l.sku_name|short }}</span><br><span class="mut" style="font-size:12px">{{ l.distributor_name }}</span></td>
+    <td><a href="/sku/{{ l.sku_id }}?run={{ run.run_id }}"><b>{{ l.sku_id }}</b></a> <span class="small">{{ l.sku_name|short }}</span><br><span class="mut" style="font-size:12px">{{ m.distributor(l) }}</span></td>
     <td>{{ 'Pause next order' if l.action == 'pause' else 'Reorder' }}</td>
     <td class="n"><b>{{ l.final_qty if l.action != 'pause' else '—' }}</b>{% if l.gate1_qty is not none and l.gate1_qty != l.qty %}<br><span class="mut">was {{ l.qty }}</span>{% endif %}</td>
     <td>{{ m.cover_bar(l, 16) }}<br><span class="small">{{ l.cover_weeks|fmtw }} w{% if l.cover_after is not none %} → {{ l.cover_after|fmtw }} w{% endif %} · window {{ l.min_weeks|wk }}–{{ l.max_weeks|wk }} w</span></td>
